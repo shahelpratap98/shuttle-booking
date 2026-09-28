@@ -1,4 +1,6 @@
 import "server-only";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { todayIn } from "@/lib/dates";
@@ -6,22 +8,53 @@ import type { Job, JobMoney, JobQuery, Profile, Result, TimeOff, Vehicle } from 
 import { seedDemo, type DemoData } from "./demo-seed";
 import type { Customer, PersonPatch, Store, VehicleInput } from "./types";
 
-// Demo mode: runs when no Supabase project is configured. Sample data lives in
-// this server process's memory (a restart resets it) and the same access rules
-// as the database's row-level security are applied here by hand.
+// Demo mode: runs when no Supabase project is configured. The data lives in
+// this server's memory and is saved to .demo-data/state.json (git-ignored) so
+// it survives a restart; the same access rules as the database's row-level
+// security are applied here by hand. Delete that file to get the sample data back.
 
 export const DEMO_COOKIE = "demo_user";
 
 // Bump when the sample data changes shape, so a running dev server reseeds.
-const SEED_VERSION = 3;
-const g = globalThis as unknown as { __shuttleDemo?: DemoData & { version?: number } };
+const SEED_VERSION = 6;
+// Set in next.config.ts to <project>/.demo-data/state.json.
+const STATE_FILE = process.env.SHUTTLE_DEMO_DATA_FILE || join(process.cwd(), ".demo-data", "state.json");
+type Stored = DemoData & { version?: number };
+const g = globalThis as unknown as { __shuttleDemo?: Stored };
+
+function load(): Stored | null {
+  try {
+    const saved = JSON.parse(readFileSync(STATE_FILE, "utf8")) as Stored;
+    return saved.version === SEED_VERSION ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function persist() {
+  try {
+    mkdirSync(dirname(STATE_FILE), { recursive: true });
+    writeFileSync(STATE_FILE, JSON.stringify(g.__shuttleDemo));
+  } catch (e) {
+    // Read-only file system (e.g. a hosted preview): keep going in memory.
+    console.warn("[demo] couldn't save demo data:", (e as Error).message);
+  }
+}
+
 function data(): DemoData {
-  if (g.__shuttleDemo?.version !== SEED_VERSION) g.__shuttleDemo = { ...seedDemo(todayIn("Pacific/Auckland")), version: SEED_VERSION };
+  if (g.__shuttleDemo?.version !== SEED_VERSION) {
+    g.__shuttleDemo = load() ?? { ...seedDemo(todayIn("Pacific/Auckland")), version: SEED_VERSION };
+  }
   return g.__shuttleDemo;
 }
 
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
-const done = { ok: true as const, data: undefined };
+// Every successful change is saved.
+function saved<T>(value: T): { ok: true; data: T } {
+  persist();
+  return { ok: true, data: value };
+}
+const done = undefined;
 const clone = <T>(x: T): T => structuredClone(x);
 
 class DemoStore implements Store {
@@ -58,7 +91,7 @@ class DemoStore implements Store {
   async saveSettings(s: Parameters<Store["saveSettings"]>[0]): Promise<Result> {
     if (!this.owner()) return fail("You don't have permission to do that.");
     data().settings = { ...s };
-    return done;
+    return saved(done);
   }
 
   async jobs(q: JobQuery) {
@@ -111,7 +144,7 @@ class DemoStore implements Store {
       if (money) j.money = { ...money };
       j.completed_at = j.status === "completed" ? (wasCompleted ? j.completed_at : new Date().toISOString()) : null;
       link(id);
-      return { ok: true, data: id };
+      return saved(id);
     }
     const newId = crypto.randomUUID();
     d.jobs.push({
@@ -126,7 +159,7 @@ class DemoStore implements Store {
       money: money ? { ...money } : null,
     });
     link(newId);
-    return { ok: true, data: newId };
+    return saved(newId);
   }
 
   async assignJob(id: string, driverId: string | null, vehicleId: string | null): Promise<Result> {
@@ -135,7 +168,7 @@ class DemoStore implements Store {
     if (!j) return fail("That job couldn't be found.");
     j.driver_id = driverId;
     j.vehicle_id = vehicleId;
-    return done;
+    return saved(done);
   }
 
   async setJobStatus(id: string, status: Job["status"]): Promise<Result> {
@@ -145,7 +178,7 @@ class DemoStore implements Store {
     if (status === "completed" && j.status !== "completed") j.completed_at = new Date().toISOString();
     if (status !== "completed") j.completed_at = null;
     j.status = status;
-    return done;
+    return saved(done);
   }
 
   async deleteJob(id: string): Promise<Result> {
@@ -153,7 +186,7 @@ class DemoStore implements Store {
     const d = data();
     const before = d.jobs.length;
     d.jobs = d.jobs.filter((x) => x.id !== id);
-    return d.jobs.length < before ? done : fail("That job couldn't be found.");
+    return d.jobs.length < before ? saved(done) : fail("That job couldn't be found.");
   }
 
   async driverUpdateJob(id: string, status: Job["status"], driverNotes: string | null, distanceKm: number | null, collectedVia: Job["collected_via"]): Promise<Result> {
@@ -171,7 +204,7 @@ class DemoStore implements Store {
     j.status = status;
     j.driver_notes = driverNotes?.trim() || null;
     if (distanceKm !== null) j.distance_km = distanceKm;
-    return done;
+    return saved(done);
   }
 
   async recentCustomers(): Promise<Customer[]> {
@@ -197,7 +230,7 @@ class DemoStore implements Store {
     const next = d.profiles.map((x) => (x.user_id === userId ? { ...x, ...patch } : x));
     if (!next.some((x) => x.role === "owner" && x.is_active)) return fail("There must always be at least one active owner.");
     Object.assign(p, patch);
-    return done;
+    return saved(done);
   }
 
   async invitePerson(p: { name: string; email: string; role: Profile["role"]; phone: string | null }): Promise<Result<{ link?: string }>> {
@@ -215,7 +248,7 @@ class DemoStore implements Store {
       pay_rate: null,
       is_active: true,
     });
-    return { ok: true, data: {} };
+    return saved({});
   }
 
   async signInLink(): Promise<Result<{ link: string }>> {
@@ -237,7 +270,7 @@ class DemoStore implements Store {
     } else {
       d.vehicles.push({ ...(v as Omit<Vehicle, "id">), id: crypto.randomUUID() });
     }
-    return done;
+    return saved(done);
   }
 
   async timeOff(from: string, to: string) {
@@ -249,7 +282,7 @@ class DemoStore implements Store {
   async addTimeOff(t: Omit<TimeOff, "id">): Promise<Result> {
     if (!(this.office() || (this.me() && t.user_id === this.userId))) return fail("You can only add your own time off.");
     data().timeOff.push({ ...t, id: crypto.randomUUID() });
-    return done;
+    return saved(done);
   }
 
   async deleteTimeOff(id: string): Promise<Result> {
@@ -257,7 +290,7 @@ class DemoStore implements Store {
     const t = d.timeOff.find((x) => x.id === id);
     if (!t || !(this.office() || (this.me() && t.user_id === this.userId))) return fail("That time off couldn't be found.");
     d.timeOff = d.timeOff.filter((x) => x.id !== id);
-    return done;
+    return saved(done);
   }
 }
 
@@ -267,3 +300,30 @@ export const demoStore = cache(async (): Promise<Store> => {
 });
 
 export const demoPeople = () => clone(data().profiles.filter((p) => p.is_active));
+
+// Sample rows are recognisable by their fixed ids (see demo-seed.ts).
+const SAMPLE = { person: "d0000001-", vehicle: "d0000002-", job: "d0000003-", timeOff: "d0000004-" };
+const SAMPLE_OWNER = "d0000001-0000-4000-8000-000000000001";
+
+// Owner, demo mode only: drop the made-up sample data and keep what was
+// entered or imported. One plain "Owner" login stays so demo mode can sign in.
+export function removeSampleData() {
+  const d = data();
+  const before = d.jobs.length;
+  d.jobs = d.jobs.filter((j) => !j.id.startsWith(SAMPLE.job));
+  const kept = new Set(d.jobs.map((j) => j.id));
+  for (const j of d.jobs) if (j.linked_job_id && !kept.has(j.linked_job_id)) j.linked_job_id = null;
+  d.timeOff = d.timeOff.filter((t) => !t.id.startsWith(SAMPLE.timeOff));
+  for (const v of d.vehicles) {
+    if (v.id.startsWith(SAMPLE.vehicle)) Object.assign(v, { registration: null, notes: null });
+  }
+  const samplePeople = new Set(d.profiles.filter((p) => p.user_id.startsWith(SAMPLE.person) && p.user_id !== SAMPLE_OWNER).map((p) => p.user_id));
+  d.profiles = d.profiles.filter((p) => !samplePeople.has(p.user_id));
+  for (const j of d.jobs) if (j.driver_id && samplePeople.has(j.driver_id)) j.driver_id = null;
+  const owner = d.profiles.find((p) => p.user_id === SAMPLE_OWNER);
+  if (owner) Object.assign(owner, { display_name: "Owner", email: "owner@example.com", phone: null });
+  persist();
+  return { bookingsRemoved: before - d.jobs.length, bookingsKept: d.jobs.length };
+}
+
+export const hasSampleData = () => data().jobs.some((j) => j.id.startsWith(SAMPLE.job)) || data().profiles.some((p) => p.user_id.startsWith(SAMPLE.person) && p.user_id !== SAMPLE_OWNER);

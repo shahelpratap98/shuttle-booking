@@ -5,6 +5,8 @@ import type { ActionState } from "@/components/action-form";
 import { requireOffice, requireOwner } from "@/lib/auth";
 import { ROLES } from "@/lib/constants";
 import { hit, waitMessage } from "@/lib/rate-limit";
+import { isDemo } from "@/lib/store";
+import { removeSampleData } from "@/lib/store/demo";
 import type { Role } from "@/lib/types";
 
 const text = (fd: FormData, name: string) => String(fd.get(name) ?? "").trim();
@@ -111,4 +113,15 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
   if (!res.ok) return { ok: false, message: res.error };
   revalidatePath("/", "layout");
   return { ok: true, message: "Saved." };
+}
+
+// ------------------------------------------------------------------ demo
+
+// Demo mode only: clear the made-up sample data, keeping imported and typed-in bookings.
+export async function clearSampleData(): Promise<ActionState> {
+  await requireOwner();
+  if (!isDemo()) return { ok: false, message: "This only applies to demo mode." };
+  const r = removeSampleData();
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Removed ${r.bookingsRemoved} sample bookings and the sample team. ${r.bookingsKept} of your own bookings are left.` };
 }

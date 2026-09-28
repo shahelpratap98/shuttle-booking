@@ -41,11 +41,16 @@ npm install
 npm run dev -- --port 4420
 ```
 
-Open http://localhost:4420. With no database configured it runs on sample
-data (26 weeks back, four months ahead) held in memory. Pick anyone on the
-sign-in screen: Alex (owner), Priya (office) or one of the drivers. A yellow
-banner shows you're in demo mode; restarting the server resets the data,
-including anything imported.
+Open http://localhost:4420. With no database configured it starts with sample
+data (26 weeks back, four months ahead). Pick anyone on the sign-in screen:
+Alex (owner), Priya (office) or one of the drivers. A yellow banner shows
+you're in demo mode.
+
+Demo data is saved to `.demo-data/state.json` (git-ignored, stays on this
+computer), so imports and edits survive a restart. **Settings → Remove sample
+data** deletes the made-up bookings, team and time off and keeps only what you
+imported or typed in (the sample team becomes a single "Owner" login). Delete
+`.demo-data/` to start over with the sample data.
 
 ## Go live
 

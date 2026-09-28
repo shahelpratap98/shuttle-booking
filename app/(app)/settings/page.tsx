@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { saveSettings } from "@/app/(app)/setup-actions";
+import { clearSampleData, saveSettings } from "@/app/(app)/setup-actions";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { requireOwner } from "@/lib/auth";
+import { hasSampleData } from "@/lib/store/demo";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -39,6 +40,17 @@ export default async function SettingsPage() {
           </div>
         </ActionForm>
       </section>
+
+      {store.mode === "demo" && hasSampleData() ? (
+        <section className="card mt-4 max-w-xl p-4">
+          <h2 className="font-bold">Sample data</h2>
+          <p className="mt-1 mb-3 text-sm text-muted">
+            Demo mode started with made-up bookings, drivers and time off. Remove them to keep only the bookings you imported or typed in.
+            The sample team is replaced by a single &ldquo;Owner&rdquo; login.
+          </p>
+          <ActionForm action={clearSampleData} submitLabel="Remove sample data" pendingLabel="Removing…" submitClass="btn btn-danger" />
+        </section>
+      ) : null}
     </>
   );
 }

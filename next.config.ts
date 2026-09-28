@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { join } from "node:path";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -14,6 +15,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // The parent folder has its own lockfile; this app is its own root.
   turbopack: { root: __dirname },
+  // Demo mode saves its data here (git-ignored), in this project whatever
+  // folder the server is started from.
+  env: { SHUTTLE_DEMO_DATA_FILE: join(__dirname, ".demo-data", "state.json") },
   // Reads uploaded spreadsheets on the server; not bundled.
   serverExternalPackages: ["exceljs"],
   experimental: {
