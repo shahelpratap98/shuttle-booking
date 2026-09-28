@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const links: NavItem[] = office
     ? [
         { href: "/dashboard", label: "Dashboard" },
-        { href: "/jobs", label: "Jobs", badge: available },
+        { href: "/jobs", label: "Bookings", badge: available },
         { href: "/calendar", label: "Calendar" },
         { href: "/time-off", label: "Time off" },
         { href: "/vehicles", label: "Vehicles" },

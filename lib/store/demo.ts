@@ -12,9 +12,11 @@ import type { Customer, PersonPatch, Store, VehicleInput } from "./types";
 
 export const DEMO_COOKIE = "demo_user";
 
-const g = globalThis as unknown as { __shuttleDemo?: DemoData };
+// Bump when the sample data changes shape, so a running dev server reseeds.
+const SEED_VERSION = 3;
+const g = globalThis as unknown as { __shuttleDemo?: DemoData & { version?: number } };
 function data(): DemoData {
-  g.__shuttleDemo ??= seedDemo(todayIn("Pacific/Auckland"));
+  if (g.__shuttleDemo?.version !== SEED_VERSION) g.__shuttleDemo = { ...seedDemo(todayIn("Pacific/Auckland")), version: SEED_VERSION };
   return g.__shuttleDemo;
 }
 
@@ -61,7 +63,7 @@ class DemoStore implements Store {
 
   async jobs(q: JobQuery) {
     const s = q.search?.trim().toLowerCase() ?? "";
-    const num = /^j?-?(\d+)$/i.exec(s)?.[1];
+    const num = /^j-?(\d+)$/i.exec(s)?.[1];
     let list = data().jobs.filter((j) => {
       if (!this.visible(j)) return false;
       if (q.from && j.pickup_date < q.from) return false;
@@ -71,7 +73,7 @@ class DemoStore implements Store {
       if (q.statuses?.length && !q.statuses.includes(j.status)) return false;
       if (num) return j.job_no === Number(num);
       if (s) {
-        const hay = [j.customer_name, j.customer_phone, j.customer_email, j.pickup_address, j.dropoff_address, j.flight_no, j.notes]
+        const hay = [j.booking_ref, j.customer_name, j.customer_phone, j.customer_email, j.pickup_address, j.dropoff_address, j.flight_no, j.notes]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -92,13 +94,23 @@ class DemoStore implements Store {
   async saveJob(id: string | null, input: Parameters<Store["saveJob"]>[1], money: JobMoney | null): Promise<Result<string>> {
     if (!this.office()) return fail("Only the owner or office staff can create or edit jobs.");
     const d = data();
+    // Same rule as public.save_job: collect the charge on the day when that's
+    // how they're paying, keep what a driver already collected, else nothing.
+    const collectFor = (existing?: Job) =>
+      money?.payment_status === "pay_on_day" ? money.price : existing?.collected_via ? existing.collect_amount : 0;
+    const link = (jobId: string) => {
+      const other = input.linked_job_id ? d.jobs.find((x) => x.id === input.linked_job_id) : undefined;
+      if (other && !other.linked_job_id) other.linked_job_id = jobId;
+    };
     if (id) {
       const j = d.jobs.find((x) => x.id === id);
       if (!j) return fail("That job no longer exists.");
       const wasCompleted = j.status === "completed";
-      Object.assign(j, input);
+      const collect = collectFor(j);
+      Object.assign(j, input, { collect_amount: collect });
       if (money) j.money = { ...money };
       j.completed_at = j.status === "completed" ? (wasCompleted ? j.completed_at : new Date().toISOString()) : null;
+      link(id);
       return { ok: true, data: id };
     }
     const newId = crypto.randomUUID();
@@ -106,11 +118,14 @@ class DemoStore implements Store {
       ...input,
       id: newId,
       job_no: d.nextJobNo++,
+      collect_amount: collectFor(),
+      collected_via: null,
       driver_notes: null,
       created_at: new Date().toISOString(),
       completed_at: input.status === "completed" ? new Date().toISOString() : null,
       money: money ? { ...money } : null,
     });
+    link(newId);
     return { ok: true, data: newId };
   }
 
@@ -141,11 +156,16 @@ class DemoStore implements Store {
     return d.jobs.length < before ? done : fail("That job couldn't be found.");
   }
 
-  async driverUpdateJob(id: string, status: Job["status"], driverNotes: string | null, distanceKm: number | null): Promise<Result> {
+  async driverUpdateJob(id: string, status: Job["status"], driverNotes: string | null, distanceKm: number | null, collectedVia: Job["collected_via"]): Promise<Result> {
     const j = data().jobs.find((x) => x.id === id);
     if (!j || !this.me() || j.driver_id !== this.userId) return fail("That job isn't assigned to you.");
     if (!["confirmed", "completed", "no_show"].includes(status)) return fail("Drivers can mark a job done or no-show, nothing else.");
     if (!["confirmed", "completed", "no_show"].includes(j.status)) return fail(`This job is ${j.status}, so only the office can change it.`);
+    if (collectedVia && j.collect_amount <= 0) return fail("There's nothing to collect on this job.");
+    if (collectedVia) {
+      j.collected_via = collectedVia;
+      if (j.money) Object.assign(j.money, { payment_status: "paid", payment_method: collectedVia, paid_on: todayIn(data().settings.timezone) });
+    }
     if (status === "completed" && j.status !== "completed") j.completed_at = new Date().toISOString();
     if (status !== "completed") j.completed_at = null;
     j.status = status;

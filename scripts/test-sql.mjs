@@ -73,9 +73,10 @@ async function fails(userId, sql, params = []) {
 const vehicleId = await as(DISP, async (tx) => (await tx.query(`insert into public.vehicles (name, seats, cost_per_km) values ('Van 1', 11, 0.35) returning id`)).rows[0].id);
 const jobFor = (driver) => ({
   pickup_date: "2026-10-01", pickup_time: "05:30", duration_min: 75, pickup_address: "12 Queen St", dropoff_address: "Airport",
-  passengers: 3, customer_name: "Pat", service_type: "airport", booking_source: "phone", driver_id: driver, vehicle_id: vehicleId, status: "confirmed",
+  passengers: 3, customer_name: "Pat", service_type: "airport", booking_source: "whatsapp", driver_id: driver, vehicle_id: vehicleId, status: "confirmed",
+  driver_pay: 35, booking_ref: "TW-20260910-024",
 });
-const money = { price: 120, driver_cost: 35, fuel_cost: 12.5, tolls_parking: 0, other_cost: 0, payment_status: "unpaid" };
+const money = { price: 120, fuel_cost: 12.5, tolls_parking: 0, other_cost: 0, payment_status: "pay_on_day" };
 const jobA = await as(DISP, async (tx) => (await tx.query(`select public.save_job(null, $1, $2) as id`, [jobFor(DRV_A), money])).rows[0].id);
 const jobB = await as(OWNER, async (tx) => (await tx.query(`select public.save_job(null, $1, $2) as id`, [jobFor(DRV_B), money])).rows[0].id);
 ok(Boolean(jobA && jobB), "office and owner can create jobs with money through save_job");
@@ -92,7 +93,9 @@ ok(m.n === 1 && m.p === 140, "save_job updates the job and upserts its money");
 const seenByA = await as(DRV_A, async (tx) => (await tx.query(`select id from public.jobs`)).rows.map((r) => r.id));
 ok(seenByA.length === 1 && seenByA[0] === jobA, "a driver sees only their own jobs");
 const moneyByA = await as(DRV_A, async (tx) => (await tx.query(`select * from public.job_money`)).rows);
-ok(moneyByA.length === 0, "a driver can't read any prices or costs");
+ok(moneyByA.length === 0, "a driver can't read the money table (charges, expenses)");
+const seenPay = await as(DRV_A, async (tx) => (await tx.query(`select driver_pay::float as pay, collect_amount::float as collect from public.jobs where id = $1`, [jobA])).rows[0]);
+ok(seenPay.pay === 35 && seenPay.collect === 140, "a driver sees their own pay and what to collect on the day");
 ok(await fails(DRV_A, `select public.save_job(null, $1, $2)`, [jobFor(DRV_A), money]), "a driver can't create jobs");
 const updated = await as(DRV_A, async (tx) => (await tx.query(`update public.jobs set driver_id = $1 where id = $2 returning id`, [DRV_A, jobB])).rows);
 ok(updated.length === 0, "a driver can't grab someone else's job");
@@ -105,6 +108,16 @@ const done = (await db.query(`select status, driver_notes, distance_km::float as
 ok(done.status === "completed" && done.driver_notes === "Flight late 20 min" && done.km === 41.5 && done.completed_at, "a driver completes their own job; completed_at stamped");
 await as(DRV_A, (tx) => tx.query(`select public.driver_update_job($1, 'confirmed', null, null)`, [jobA]));
 ok((await db.query(`select completed_at from public.jobs where id = $1`, [jobA])).rows[0].completed_at === null, "undoing completion clears completed_at");
+await as(DRV_A, (tx) => tx.query(`select public.driver_update_job($1, 'completed', null, null, 'cash')`, [jobA]));
+const paid = (await db.query(`select m.payment_status, m.payment_method, m.paid_on, j.collected_via from public.job_money m join public.jobs j on j.id = m.job_id where m.job_id = $1`, [jobA])).rows[0];
+ok(paid.payment_status === "paid" && paid.payment_method === "cash" && paid.paid_on && paid.collected_via === "cash", "a driver records cash collected; the job is marked paid");
+await as(DISP, (tx) => tx.query(`select public.save_job($1, $2, $3)`, [jobA, { ...jobFor(DRV_A), passengers: 4, status: "completed" }, { ...money, price: 140, payment_status: "paid", payment_method: "cash" }]));
+ok(Number((await db.query(`select collect_amount from public.jobs where id = $1`, [jobA])).rows[0].collect_amount) === 140, "editing a collected job keeps the collected amount");
+await as(DISP, (tx) => tx.query(`select public.save_job($1, $2, $3)`, [jobB, jobFor(DRV_B), { ...money, payment_status: "paid", payment_method: "online" }]));
+ok(await fails(DRV_B, `select public.driver_update_job($1, 'completed', null, null, 'cash')`, [jobB]), "a driver can't record collecting money on a prepaid job");
+const ret = await as(DISP, async (tx) => (await tx.query(`select public.save_job(null, $1, $2) as id`, [{ ...jobFor(null), linked_job_id: jobA, pickup_address: "Airport", dropoff_address: "12 Queen St" }, money])).rows[0].id);
+const links = (await db.query(`select id, linked_job_id from public.jobs where id in ($1, $2)`, [jobA, ret])).rows;
+ok(links.find((r) => r.id === ret).linked_job_id === jobA && links.find((r) => r.id === jobA).linked_job_id === ret, "a return trip and its outbound job point at each other");
 
 // people
 const teamSeenByA = await as(DRV_A, async (tx) => (await tx.query(`select user_id from public.profiles`)).rows);

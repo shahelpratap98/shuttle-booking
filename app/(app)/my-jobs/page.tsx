@@ -6,7 +6,7 @@ import { EmptyState, PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth";
 import { SERVICE_LABEL } from "@/lib/constants";
 import { addDays, fmtDay, fmtDuration, fmtTime, minutesOf, startOfWeek, timeFromMinutes, todayIn } from "@/lib/dates";
-import { jobRef, mapsLink } from "@/lib/format";
+import { bookingRef, mapsLink, money } from "@/lib/format";
 import type { Job, Vehicle } from "@/lib/types";
 
 export const metadata: Metadata = { title: "My jobs" };
@@ -57,7 +57,7 @@ export default async function MyJobsPage() {
         <section className="mb-6">
           <h2 className="mb-2 text-lg font-bold text-warn">Still to mark as done ({toFinish.length})</h2>
           <div className="flex flex-col gap-3">
-            {toFinish.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} finish />)}
+            {toFinish.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} finish />)}
           </div>
         </section>
       ) : null}
@@ -68,7 +68,7 @@ export default async function MyJobsPage() {
           <EmptyState title="No jobs today." />
         ) : (
           <div className="flex flex-col gap-3">
-            {todays.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} finish />)}
+            {todays.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} finish />)}
           </div>
         )}
       </section>
@@ -83,7 +83,7 @@ export default async function MyJobsPage() {
               <div key={d}>
                 <h3 className="mb-2 text-sm font-bold text-muted uppercase">{d === addDays(today, 1) ? "Tomorrow" : fmtDay(d)}</h3>
                 <div className="flex flex-col gap-3">
-                  {list.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} />)}
+                  {list.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} />)}
                 </div>
               </div>
             ))}
@@ -109,7 +109,8 @@ export default async function MyJobsPage() {
   );
 }
 
-function JobCard({ job: j, vehicle, today, finish }: { job: Job; vehicle?: Vehicle; today: string; finish?: boolean }) {
+function JobCard({ job: j, vehicle, today, currency, finish }: { job: Job; vehicle?: Vehicle; today: string; currency: string; finish?: boolean }) {
+  const toCollect = j.collect_amount > 0 && !j.collected_via;
   const ends = timeFromMinutes(minutesOf(j.pickup_time) + j.duration_min);
   return (
     <article className="card overflow-hidden">
@@ -118,7 +119,7 @@ function JobCard({ job: j, vehicle, today, finish }: { job: Job; vehicle?: Vehic
         <span className="text-sm text-muted">until about {fmtTime(ends)}</span>
         {j.pickup_date !== today ? <span className="text-sm font-semibold">{fmtDay(j.pickup_date)}</span> : null}
         <span className="ml-auto flex items-center gap-2">
-          <Link href={`/jobs/${j.id}`} className="text-sm text-muted hover:underline">{jobRef(j.job_no)}</Link>
+          <Link href={`/jobs/${j.id}`} className="text-sm text-muted hover:underline">{bookingRef(j)}</Link>
           {j.status !== "confirmed" ? <StatusChip status={j.status} /> : null}
         </span>
       </div>
@@ -141,12 +142,30 @@ function JobCard({ job: j, vehicle, today, finish }: { job: Job; vehicle?: Vehic
             {j.flight_no ? ` · flight ${j.flight_no}` : ""} · {SERVICE_LABEL[j.service_type]}
           </p>
           {vehicle ? <p className="text-muted">Vehicle: {vehicle.name}{vehicle.registration ? ` (${vehicle.registration})` : ""}</p> : null}
+          {j.is_shared ? <p className="text-muted">Shared ride with other bookings</p> : null}
+          <p className="mt-2 flex flex-wrap gap-2">
+            {toCollect ? (
+              <span className="chip bg-info-bg px-3 py-1 text-sm text-info">Collect {money(j.collect_amount, currency)}</span>
+            ) : j.collected_via ? (
+              <span className="chip bg-ok-bg px-3 py-1 text-sm text-ok">Collected ({j.collected_via})</span>
+            ) : (
+              <span className="chip bg-surface-2 px-3 py-1 text-sm text-muted">Nothing to collect</span>
+            )}
+            {j.driver_pay ? <span className="chip bg-surface-2 px-3 py-1 text-sm text-text">Your pay {money(j.driver_pay, currency)}</span> : null}
+          </p>
           {j.notes ? <p className="mt-2 rounded-lg bg-warn-bg px-3 py-2 text-warn"><b>Note:</b> {j.notes}</p> : null}
         </div>
       </div>
       {finish ? (
         <div className="border-t border-line p-4">
-          <DriverDoneForm jobId={j.id} status={j.status} distanceKm={j.distance_km} driverNotes={j.driver_notes} />
+          <DriverDoneForm
+            jobId={j.id}
+            status={j.status}
+            distanceKm={j.distance_km}
+            driverNotes={j.driver_notes}
+            collect={toCollect ? money(j.collect_amount, currency) : null}
+            canFinish={j.pickup_date <= today}
+          />
         </div>
       ) : null}
     </article>

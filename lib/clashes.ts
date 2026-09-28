@@ -5,12 +5,15 @@ import type { Job, Profile, TimeOff, Vehicle } from "@/lib/types";
 // A driver needs a little time between jobs to get to the next pickup.
 export const TURNAROUND_MIN = 15;
 
-type Slot = Pick<Job, "id" | "pickup_date" | "pickup_time" | "duration_min" | "driver_id" | "vehicle_id" | "status">;
+type Slot = Pick<Job, "id" | "pickup_date" | "pickup_time" | "duration_min" | "driver_id" | "vehicle_id" | "status" | "is_shared">;
 
 export const live = (j: Slot) => j.status === "confirmed" || j.status === "enquiry" || j.status === "completed";
 
+// Two jobs that tie up the same driver or vehicle at once. Shared jobs are
+// meant to run together, so two shared jobs never clash with each other.
 export function overlaps(a: Slot, b: Slot): boolean {
   if (a.pickup_date !== b.pickup_date) return false;
+  if (a.is_shared && b.is_shared) return false;
   const a0 = minutesOf(a.pickup_time);
   const b0 = minutesOf(b.pickup_time);
   return a0 < b0 + b.duration_min + TURNAROUND_MIN && b0 < a0 + a.duration_min + TURNAROUND_MIN;

@@ -42,7 +42,7 @@ export function AssignForm({
         onChange={(e) => setDriver(e.target.value)}
         className={`field ${compact ? "w-full py-1.5 text-sm sm:w-60" : ""}`}
       >
-        <option value="">No driver yet</option>
+        <option value="">TBC</option>
         {drivers.map((d) => (
           <option key={d.id} value={d.id}>{d.name}{d.note ? ` (${d.note})` : ""}</option>
         ))}
@@ -96,13 +96,41 @@ export function StatusButtons({ jobId, status }: { jobId: string; status: JobSta
   );
 }
 
-// Driver: finish a job from their phone.
-export function DriverDoneForm({ jobId, status, distanceKm, driverNotes }: { jobId: string; status: JobStatus; distanceKm: number | null; driverNotes: string | null }) {
+// Driver: finish a job from their phone. On a pay-on-the-day job they also
+// say how the customer paid, which marks the booking paid for the office.
+export function DriverDoneForm({
+  jobId,
+  status,
+  distanceKm,
+  driverNotes,
+  collect = null,
+  canFinish = true,
+}: {
+  jobId: string;
+  status: JobStatus;
+  distanceKm: number | null;
+  driverNotes: string | null;
+  collect?: string | null; // "$180.00" when there's money to collect
+  canFinish?: boolean; // false before the day of the job
+}) {
   const [state, action, pending] = useActionState(driverUpdate, undefined);
   const done = status === "completed" || status === "no_show";
   return (
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="job_id" value={jobId} />
+      {collect ? (
+        <fieldset className="rounded-lg border border-info/30 bg-info-bg p-3">
+          <legend className="px-1 text-sm font-bold text-info">Collect {collect}</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-[15px]">
+            {[["cash", "Paid cash"], ["card", "Paid by card"], ["", "Not paid yet"]].map(([v, label]) => (
+              <label key={v} className="inline-flex min-h-11 items-center gap-2 font-semibold">
+                <input type="radio" name="collected_via" value={v} defaultChecked={v === ""} className="size-5" />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor={`km-${jobId}`} className="field-label">Km driven</label>
@@ -116,14 +144,16 @@ export function DriverDoneForm({ jobId, status, distanceKm, driverNotes }: { job
       <div className="flex flex-wrap gap-2">
         {done ? (
           <>
-            <button type="submit" name="status" value={status} disabled={pending} className="btn btn-primary">{pending ? <Spinner /> : null} Save notes</button>
+            <button type="submit" name="status" value={status} disabled={pending} className="btn btn-primary">{pending ? <Spinner /> : null} Save</button>
             <button type="submit" name="status" value="confirmed" disabled={pending} className="btn btn-quiet">Undo: not done yet</button>
           </>
-        ) : (
+        ) : canFinish ? (
           <>
             <button type="submit" name="status" value="completed" disabled={pending} className="btn btn-primary flex-1 sm:flex-none">{pending ? <Spinner /> : null} Mark done</button>
             <button type="submit" name="status" value="no_show" disabled={pending} className="btn btn-danger">Customer no-show</button>
           </>
+        ) : (
+          <p className="text-sm text-muted">You can mark this done on the day.</p>
         )}
       </div>
       <Outcome state={state} />

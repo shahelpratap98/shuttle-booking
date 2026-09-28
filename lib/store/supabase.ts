@@ -8,8 +8,8 @@ import type { Customer, Store } from "./types";
 
 const PROFILE_COLS = "user_id, display_name, email, phone, role, colour, pay_rate, is_active";
 const JOB_COLS =
-  "id, job_no, status, service_type, pickup_date, pickup_time, duration_min, pickup_address, dropoff_address, passengers, luggage, flight_no, customer_name, customer_phone, customer_email, booking_source, driver_id, vehicle_id, notes, driver_notes, distance_km, created_at, completed_at";
-const MONEY_COLS = "price, driver_cost, fuel_cost, tolls_parking, other_cost, payment_status";
+  "id, job_no, booking_ref, status, service_type, pickup_date, pickup_time, duration_min, pickup_address, dropoff_address, passengers, luggage, flight_no, customer_name, customer_phone, customer_email, booking_source, driver_id, vehicle_id, linked_job_id, is_shared, driver_pay, collect_amount, collected_via, notes, driver_notes, distance_km, created_at, completed_at";
+const MONEY_COLS = "price, fuel_cost, tolls_parking, other_cost, payment_status, payment_method, paid_on";
 
 const DEFAULT_SETTINGS: Settings = { business_name: "Shuttle Bookings", currency: "NZD", timezone: "Pacific/Auckland" };
 
@@ -36,14 +36,17 @@ function toJob(r: Row): Job {
     job_no: Number(r.job_no),
     pickup_time: String(r.pickup_time).slice(0, 5),
     distance_km: n(r.distance_km),
+    driver_pay: Number(r.driver_pay ?? 0),
+    collect_amount: Number(r.collect_amount ?? 0),
     money: moneyRow
       ? {
           price: Number(moneyRow.price),
-          driver_cost: Number(moneyRow.driver_cost),
           fuel_cost: Number(moneyRow.fuel_cost),
           tolls_parking: Number(moneyRow.tolls_parking),
           other_cost: Number(moneyRow.other_cost),
           payment_status: moneyRow.payment_status as JobMoney["payment_status"],
+          payment_method: (moneyRow.payment_method as JobMoney["payment_method"]) ?? null,
+          paid_on: (moneyRow.paid_on as string | null) ?? null,
         }
       : r.job_money === undefined
         ? undefined
@@ -95,12 +98,12 @@ class SupabaseStore implements Store {
     if (q.statuses?.length) query = query.in("status", q.statuses);
     if (q.search) {
       const s = cleanSearch(q.search);
-      const num = /^j?-?(\d+)$/i.exec(s)?.[1];
+      const num = /^j-?(\d+)$/i.exec(s)?.[1];
       if (num) query = query.eq("job_no", Number(num));
       else if (s) {
         const like = `%${s}%`;
         query = query.or(
-          ["customer_name", "customer_phone", "customer_email", "pickup_address", "dropoff_address", "flight_no", "notes"]
+          ["booking_ref", "customer_name", "customer_phone", "customer_email", "pickup_address", "dropoff_address", "flight_no", "notes"]
             .map((c) => `${c}.ilike.${like}`)
             .join(","),
         );
@@ -147,12 +150,13 @@ class SupabaseStore implements Store {
     return data?.length ? done : fail("That job couldn't be found.");
   }
 
-  async driverUpdateJob(id: string, status: Job["status"], driverNotes: string | null, distanceKm: number | null): Promise<Result> {
+  async driverUpdateJob(id: string, status: Job["status"], driverNotes: string | null, distanceKm: number | null, collectedVia: Job["collected_via"]): Promise<Result> {
     const { error } = await this.db.rpc("driver_update_job", {
       p_job_id: id,
       p_status: status,
       p_driver_notes: driverNotes,
       p_distance_km: distanceKm,
+      p_collected_via: collectedVia,
     });
     return error ? fail(friendly(error.message)) : done;
   }

@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { requireOffice } from "@/lib/auth";
 import { isIsoDate, isTime } from "@/lib/dates";
-import { jobRef } from "@/lib/format";
+import { bookingRef, shareLabel } from "@/lib/format";
 import type { Job } from "@/lib/types";
 import { jobFormLists } from "../form-data";
 import { JobForm } from "../job-form";
 
-export const metadata: Metadata = { title: "New job" };
+export const metadata: Metadata = { title: "New booking" };
 
 export default async function NewJobPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { store } = await requireOffice();
@@ -21,26 +21,33 @@ export default async function NewJobPage({ searchParams }: { searchParams: Promi
     driver_id: s("driver") || null,
     status: "confirmed",
   };
-  let title = "New job";
-  let intro = "Everything a driver needs, plus what it earns and costs.";
+  let title = "New booking";
+  let intro = "One row of the booking sheet: trip, customer, driver, charge and pay.";
 
-  // Copy an existing job: a repeat of the same trip, or the return leg.
+  // Copy an existing job: the return leg, or a repeat of the same trip.
   const source = s("from") ? await store.job(s("from")) : null;
   if (source) {
     const isReturn = s("return") === "1";
+    const ref = source.booking_ref;
     defaults = {
       ...source,
+      booking_ref: isReturn && ref ? (/-OUT$/i.test(ref) ? ref.replace(/-OUT$/i, "-RET") : `${ref}-RET`) : null,
       pickup_date: isReturn ? source.pickup_date : defaults.pickup_date,
       pickup_time: "",
       pickup_address: isReturn ? source.dropoff_address : source.pickup_address,
       dropoff_address: isReturn ? source.pickup_address : source.dropoff_address,
       flight_no: null,
       driver_id: null,
+      driver_pay: 0,
+      distance_km: null,
+      linked_job_id: isReturn ? source.id : null,
       status: "confirmed",
-      money: source.money ? { ...source.money, driver_cost: 0, fuel_cost: 0, tolls_parking: 0, other_cost: 0, payment_status: "unpaid" } : null,
+      money: source.money ? { ...source.money, fuel_cost: 0, tolls_parking: 0, other_cost: 0 } : null,
     };
-    title = isReturn ? `Return trip for ${jobRef(source.job_no)}` : `Copy of ${jobRef(source.job_no)}`;
-    intro = isReturn ? "Addresses are swapped. Set the date and time of the return." : "Set the new date and time.";
+    title = isReturn ? `Return trip for ${bookingRef(source)}` : `Copy of ${bookingRef(source)}`;
+    intro = isReturn
+      ? "Addresses are swapped and the two legs are linked. Set the date, time and flight of the return."
+      : "Set the new date and time.";
   }
 
   return (
@@ -53,6 +60,8 @@ export default async function NewJobPage({ searchParams }: { searchParams: Promi
         customers={lists.customers}
         places={lists.places}
         currency={lists.settings.currency}
+        shareName={shareLabel(lists.settings.business_name)}
+        today={lists.today}
       />
     </>
   );

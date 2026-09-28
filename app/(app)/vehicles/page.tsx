@@ -9,11 +9,11 @@ export const metadata: Metadata = { title: "Vehicles" };
 
 export default async function VehiclesPage() {
   const { store } = await requireOffice();
-  const [vehicles, settings] = await Promise.all([store.vehicles(), store.settings()]);
+  const vehicles = await store.vehicles();
 
   return (
     <>
-      <PageHeader title="Vehicles" intro="Seats warn you when a job has too many passengers. Cost per km (fuel, tyres, servicing) suggests each job's running cost." />
+      <PageHeader title="Vehicles" intro="Car, Van, or each vehicle by name. Seats warn you when a booking has more people than fit." />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-3">
           {vehicles.length === 0 ? <p className="card p-4 text-sm text-muted">No vehicles yet. Add your first one.</p> : null}
@@ -22,7 +22,7 @@ export default async function VehiclesPage() {
               <h2 className="mb-3 font-bold">{v.name}{v.is_active ? "" : " (not in use)"}</h2>
               <ActionForm action={saveVehicle} submitLabel="Save" submitClass="btn btn-sm btn-quiet" className="flex flex-col gap-3">
                 <input type="hidden" name="id" value={v.id} />
-                <VehicleFields v={v} currency={settings.currency} />
+                <VehicleFields v={v} />
                 <label className="inline-flex items-center gap-2 text-sm font-semibold">
                   <input type="checkbox" name="is_active" defaultChecked={v.is_active} className="size-4" /> In use
                 </label>
@@ -33,7 +33,7 @@ export default async function VehiclesPage() {
         <section className="card h-fit p-4">
           <h2 className="mb-3 font-bold">Add a vehicle</h2>
           <ActionForm action={saveVehicle} submitLabel="Add vehicle" pendingLabel="Adding…" resetOnSuccess className="flex flex-col gap-3">
-            <VehicleFields currency={settings.currency} />
+            <VehicleFields />
           </ActionForm>
         </section>
       </div>
@@ -41,13 +41,13 @@ export default async function VehiclesPage() {
   );
 }
 
-function VehicleFields({ v, currency }: { v?: Vehicle; currency: string }) {
+function VehicleFields({ v }: { v?: Vehicle }) {
   const k = v?.id ?? "new";
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="col-span-2">
         <label htmlFor={`name-${k}`} className="field-label">Name</label>
-        <input id={`name-${k}`} name="name" required maxLength={60} defaultValue={v?.name} className="field" placeholder="Van 1 · Hiace" />
+        <input id={`name-${k}`} name="name" required maxLength={60} defaultValue={v?.name} className="field" placeholder="Van" />
       </div>
       <div>
         <label htmlFor={`rego-${k}`} className="field-label">Registration</label>
@@ -57,13 +57,9 @@ function VehicleFields({ v, currency }: { v?: Vehicle; currency: string }) {
         <label htmlFor={`seats-${k}`} className="field-label">Passenger seats</label>
         <input id={`seats-${k}`} name="seats" type="number" min={1} max={99} defaultValue={v?.seats ?? ""} className="field" />
       </div>
-      <div>
-        <label htmlFor={`cpk-${k}`} className="field-label">Cost per km ({currency})</label>
-        <input id={`cpk-${k}`} name="cost_per_km" inputMode="decimal" defaultValue={v?.cost_per_km ?? ""} className="field" placeholder="0.32" />
-      </div>
-      <div>
+      <div className="col-span-2">
         <label htmlFor={`notes-${k}`} className="field-label">Notes</label>
-        <input id={`notes-${k}`} name="notes" maxLength={500} defaultValue={v?.notes ?? ""} className="field" placeholder="WOF due March" />
+        <input id={`notes-${k}`} name="notes" maxLength={500} defaultValue={v?.notes ?? ""} className="field" placeholder="Toyota Hiace, WOF due March" />
       </div>
     </div>
   );

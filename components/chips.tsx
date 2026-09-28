@@ -1,4 +1,4 @@
-import { PAYMENT_LABEL, STATUS_LABEL } from "@/lib/constants";
+import { NO_DRIVER, PAYMENT_LABEL, STATUS_LABEL } from "@/lib/constants";
 import type { JobStatus, PaymentStatus } from "@/lib/types";
 
 const STATUS_TONE: Record<JobStatus, string> = {
@@ -15,7 +15,8 @@ export function StatusChip({ status }: { status: JobStatus }) {
 
 const PAY_TONE: Record<PaymentStatus, string> = {
   unpaid: "bg-warn-bg text-warn",
-  invoiced: "bg-info-bg text-info",
+  pay_on_day: "bg-info-bg text-info",
+  invoiced: "bg-idle-bg text-idle",
   paid: "bg-ok-bg text-ok",
 };
 
@@ -29,5 +30,5 @@ export function PersonDot({ colour, className = "size-2.5" }: { colour: string; 
 }
 
 export function Unassigned() {
-  return <span className="chip border border-dashed border-warn/60 bg-warn-bg text-warn">Unassigned</span>;
+  return <span className="chip border border-dashed border-warn/60 bg-warn-bg text-warn">{NO_DRIVER}</span>;
 }

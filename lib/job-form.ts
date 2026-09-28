@@ -1,4 +1,4 @@
-import { PAYMENTS, SERVICES, SOURCES, STATUSES } from "@/lib/constants";
+import { METHODS, PAYMENTS, SERVICES, SOURCES, STATUSES } from "@/lib/constants";
 import { isIsoDate, isTime } from "@/lib/dates";
 import type { JobInput, JobMoney } from "@/lib/types";
 
@@ -23,8 +23,8 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
   if (!isIsoDate(pickup_date)) return { error: "Enter the pickup date." };
   if (!isTime(pickup_time)) return { error: "Enter the pickup time." };
 
-  const pickup_address = text(fd, "pickup_address").slice(0, 200);
-  const dropoff_address = text(fd, "dropoff_address").slice(0, 200);
+  const pickup_address = text(fd, "pickup_address").slice(0, 300);
+  const dropoff_address = text(fd, "dropoff_address").slice(0, 300);
   if (!pickup_address) return { error: "Enter where to pick up." };
   if (!dropoff_address) return { error: "Enter where to drop off." };
   const customer_name = text(fd, "customer_name").slice(0, 120);
@@ -42,8 +42,8 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
     passengers: number(fd, "passengers", "Passengers", 1, 99, { int: true }),
     luggage: number(fd, "luggage", "Bags", 0, 199, { int: true }),
     distance_km: number(fd, "distance_km", "Distance", 0, 5000, { optional: true }),
-    price: number(fd, "price", "Price", 0, 1_000_000),
-    driver_cost: number(fd, "driver_cost", "Driver cost", 0, 1_000_000),
+    price: number(fd, "price", "Charge", 0, 1_000_000),
+    driver_pay: number(fd, "driver_pay", "Driver pay", 0, 1_000_000),
     fuel_cost: number(fd, "fuel_cost", "Fuel cost", 0, 1_000_000),
     tolls_parking: number(fd, "tolls_parking", "Tolls and parking", 0, 1_000_000),
     other_cost: number(fd, "other_cost", "Other cost", 0, 1_000_000),
@@ -52,13 +52,19 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
   const N = nums as Record<keyof typeof nums, number | null>;
 
   const payment_status = text(fd, "payment_status");
-  if (!PAYMENTS.includes(payment_status as never)) return { error: "Pick a payment status." };
+  if (!PAYMENTS.includes(payment_status as never)) return { error: "Pick how it's being paid." };
+  const payment_method = text(fd, "payment_method");
+  if (payment_method && !METHODS.includes(payment_method as never)) return { error: "Pick how it was paid." };
+  const paid_on = text(fd, "paid_on");
+  if (paid_on && !isIsoDate(paid_on)) return { error: "The paid date isn't a valid date." };
+  if ((N.driver_pay ?? 0) > (N.price ?? 0) && (N.price ?? 0) > 0) return { error: "Driver pay is more than the charge. Check the numbers." };
 
   const email = text(fd, "customer_email");
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "The customer's email doesn't look right." };
 
   return {
     input: {
+      booking_ref: textOrNull(fd, "booking_ref", 60),
       status: status as JobInput["status"],
       service_type: service_type as JobInput["service_type"],
       pickup_date,
@@ -68,23 +74,28 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
       dropoff_address,
       passengers: N.passengers ?? 1,
       luggage: N.luggage ?? 0,
-      flight_no: textOrNull(fd, "flight_no", 20)?.toUpperCase() ?? null,
+      flight_no: textOrNull(fd, "flight_no", 60),
       customer_name,
-      customer_phone: textOrNull(fd, "customer_phone", 40),
+      customer_phone: textOrNull(fd, "customer_phone", 60),
       customer_email: email.slice(0, 120) || null,
       booking_source: booking_source as JobInput["booking_source"],
       driver_id: text(fd, "driver_id") || null,
       vehicle_id: text(fd, "vehicle_id") || null,
+      linked_job_id: text(fd, "linked_job_id") || null,
+      is_shared: fd.get("is_shared") === "on",
+      driver_pay: N.driver_pay ?? 0,
       notes: textOrNull(fd, "notes", 1000),
       distance_km: N.distance_km,
     },
     money: {
       price: N.price ?? 0,
-      driver_cost: N.driver_cost ?? 0,
       fuel_cost: N.fuel_cost ?? 0,
       tolls_parking: N.tolls_parking ?? 0,
       other_cost: N.other_cost ?? 0,
       payment_status: payment_status as JobMoney["payment_status"],
+      // a method and date only mean something once it's paid
+      payment_method: payment_status === "paid" ? ((payment_method || null) as JobMoney["payment_method"]) : null,
+      paid_on: payment_status === "paid" ? paid_on || null : null,
     },
   };
 }

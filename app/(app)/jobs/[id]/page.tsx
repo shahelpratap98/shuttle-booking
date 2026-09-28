@@ -3,19 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { deleteJob } from "@/app/(app)/jobs/actions";
+import { JobCard } from "@/app/(app)/jobs/job-card";
 import { AssignForm, DriverDoneForm, StatusButtons } from "@/app/(app)/jobs/job-controls";
 import { PaymentChip, PersonDot, StatusChip, Unassigned } from "@/components/chips";
 import { ActionSubmit } from "@/components/pending-buttons";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
 import { isOffice, requireViewer } from "@/lib/auth";
 import { jobWarnings } from "@/lib/clashes";
-import { SERVICE_LABEL, SOURCE_LABEL } from "@/lib/constants";
-import { fmtDuration, fmtLong, fmtTime, minutesOf, timeFromMinutes } from "@/lib/dates";
-import { jobRef, mapsLink, money, profit, totalCost } from "@/lib/format";
+import { METHOD_LABEL, SERVICE_LABEL, SOURCE_LABEL } from "@/lib/constants";
+import { fmtDate, fmtDay, fmtDuration, fmtLong, fmtTime, minutesOf, timeFromMinutes, todayIn } from "@/lib/dates";
+import { bookingRef, businessPay, charge, expenses, jobRef, mapsLink, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
+import { jobCardText } from "@/lib/job-card";
 
-export const metadata: Metadata = { title: "Job" };
+export const metadata: Metadata = { title: "Booking" };
 
-const SAVED: Record<string, string> = { created: "Job created.", updated: "Changes saved." };
+const SAVED: Record<string, string> = { created: "Booking saved.", updated: "Changes saved." };
 
 export default async function JobPage({
   params,
@@ -31,41 +33,49 @@ export default async function JobPage({
   if (!job) notFound();
 
   const office = isOffice(viewer.role);
-  const [settings, people, vehicles, sameDay, timeOff] = await Promise.all([
+  const [settings, people, vehicles, sameDay, timeOff, linked] = await Promise.all([
     store.settings(),
     store.people(),
     store.vehicles(),
     store.jobs({ from: job.pickup_date, to: job.pickup_date }),
     store.timeOff(job.pickup_date, job.pickup_date),
+    job.linked_job_id ? store.job(job.linked_job_id) : Promise.resolve(null),
   ]);
   const cur = settings.currency;
+  const share = shareLabel(settings.business_name);
   const driver = people.find((p) => p.user_id === job.driver_id);
   const vehicle = vehicles.find((v) => v.id === job.vehicle_id);
   const warnings = office ? jobWarnings(job, sameDay, timeOff, people, vehicles) : [];
+  const sharedWith = job.is_shared ? sameDay.filter((o) => o.id !== job.id && o.is_shared && o.driver_id === job.driver_id && o.status !== "cancelled") : [];
   const ends = timeFromMinutes(minutesOf(job.pickup_time) + job.duration_min);
   const saved = typeof q.saved === "string" ? SAVED[q.saved] : undefined;
   const error = typeof q.error === "string" ? q.error : undefined;
   const m = job.money;
+  const mine = job.driver_id === viewer.user_id;
+  const toCollect = job.collect_amount > 0 && !job.collected_via;
+  const today = todayIn(settings.timezone);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-muted">
-            <Link href={office ? "/jobs" : "/my-jobs"} className="hover:underline">{office ? "Jobs" : "My jobs"}</Link> / {jobRef(job.job_no)}
+            <Link href={office ? "/jobs" : "/my-jobs"} className="hover:underline">{office ? "Bookings" : "My jobs"}</Link> / {bookingRef(job)}
+            {job.booking_ref ? <span className="font-normal"> ({jobRef(job.job_no)})</span> : null}
           </p>
           <h1 className="mt-1 text-2xl font-bold sm:text-[28px]">
             {fmtLong(job.pickup_date)}, {fmtTime(job.pickup_time)}
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[15px] text-muted">
             <StatusChip status={job.status} />
-            {SERVICE_LABEL[job.service_type]} · until about {fmtTime(ends)} ({fmtDuration(job.duration_min)})
+            {job.is_shared ? <span className="chip bg-info-bg text-info">Shared ride</span> : null}
+            {SERVICE_LABEL[job.service_type]} · driver busy until about {fmtTime(ends)} ({fmtDuration(job.duration_min)})
           </p>
         </div>
         {office ? (
           <div className="flex flex-wrap gap-2 print:hidden">
             <Link href={`/jobs/${job.id}/edit`} className="btn btn-primary">Edit</Link>
-            <Link href={`/jobs/new?from=${job.id}&return=1`} className="btn btn-quiet">Add return trip</Link>
+            {!job.linked_job_id ? <Link href={`/jobs/new?from=${job.id}&return=1`} className="btn btn-quiet">Add return trip</Link> : null}
             <Link href={`/jobs/new?from=${job.id}`} className="btn btn-quiet">Copy</Link>
           </div>
         ) : null}
@@ -78,6 +88,15 @@ export default async function JobPage({
           <p className="font-bold">Check this before the day</p>
           <ul className="mt-1 list-disc pl-5">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
         </div>
+      ) : null}
+      {toCollect ? (
+        <p className="rounded-lg border border-info/30 bg-info-bg px-4 py-3 text-[15px] font-semibold text-info">
+          {mine && !office ? "Collect" : "Driver collects"} {money(job.collect_amount, cur)} from the customer on the day.
+        </p>
+      ) : job.collected_via ? (
+        <p className="rounded-lg bg-ok-bg px-4 py-2.5 text-sm font-semibold text-ok">
+          {money(job.collect_amount, cur)} collected by the driver ({METHOD_LABEL[job.collected_via].toLowerCase()}).
+        </p>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -99,13 +118,27 @@ export default async function JobPage({
               Open directions in Google Maps
             </a>
             <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-              <Fact label="Passengers" value={job.passengers} />
+              <Fact label="# of people" value={job.passengers} />
               <Fact label="Bags" value={job.luggage} />
-              <Fact label="Flight" value={job.flight_no ?? "–"} />
-              <Fact label="Distance" value={job.distance_km == null ? "–" : `${job.distance_km} km`} />
+              <Fact label="Flight information" value={job.flight_no ?? "–"} />
+              <Fact label="Km driven" value={job.distance_km == null ? "–" : `${job.distance_km} km`} />
             </dl>
-            {job.notes ? <p className="mt-4 rounded-lg bg-warn-bg px-3 py-2 text-sm text-warn"><b>Notes:</b> {job.notes}</p> : null}
+            {job.notes ? <p className="mt-4 rounded-lg bg-warn-bg px-3 py-2 text-sm text-warn"><b>More info:</b> {job.notes}</p> : null}
             {job.driver_notes ? <p className="mt-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"><b>From the driver:</b> {job.driver_notes}</p> : null}
+            {linked ? (
+              <p className="mt-3 text-sm">
+                {linked.pickup_date >= job.pickup_date ? "Return trip" : "Outbound trip"}:{" "}
+                <Link href={`/jobs/${linked.id}`} className="link">{bookingRef(linked)}, {fmtDay(linked.pickup_date)} {fmtTime(linked.pickup_time)}</Link>
+              </p>
+            ) : null}
+            {sharedWith.length ? (
+              <p className="mt-2 text-sm">
+                Shared with:{" "}
+                {sharedWith.map((o, i) => (
+                  <span key={o.id}>{i ? ", " : ""}<Link href={`/jobs/${o.id}`} className="link">{o.customer_name} ({fmtTime(o.pickup_time)})</Link></span>
+                ))}
+              </p>
+            ) : null}
           </Card>
 
           <Card title="Customer">
@@ -115,19 +148,25 @@ export default async function JobPage({
               {job.customer_email ? <a href={`mailto:${job.customer_email}`} className="link">{job.customer_email}</a> : null}
               {!job.customer_phone && !job.customer_email ? <span className="text-muted">No contact details</span> : null}
             </div>
-            {office ? <p className="mt-2 text-sm text-muted">Booked by {SOURCE_LABEL[job.booking_source].toLowerCase()} on {fmtLong(job.created_at.slice(0, 10))}.</p> : null}
+            {office ? <p className="mt-2 text-sm text-muted">Booked through {SOURCE_LABEL[job.booking_source].toLowerCase()} on {fmtLong(job.created_at.slice(0, 10))}.</p> : null}
           </Card>
+
+          {office ? (
+            <Card title="Job card for the driver">
+              <JobCard
+                text={jobCardText(job, { businessName: settings.business_name, currency: cur, driver, vehicle })}
+                whatsappTo={whatsappNumber(driver?.phone)}
+                driverName={driver?.display_name ?? null}
+              />
+            </Card>
+          ) : null}
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
           <Card title="Driver and vehicle">
             <p className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-              {driver ? (
-                <span className="inline-flex items-center gap-2 font-semibold"><PersonDot colour={driver.colour} /> {driver.display_name}</span>
-              ) : (
-                <Unassigned />
-              )}
-              {vehicle ? <span className="text-muted">in {vehicle.name}{vehicle.registration ? ` (${vehicle.registration})` : ""}</span> : null}
+              {driver ? <span className="inline-flex items-center gap-2 font-semibold"><PersonDot colour={driver.colour} /> {driver.display_name}</span> : <Unassigned />}
+              {vehicle ? <span className="text-muted">in the {vehicle.name}{vehicle.registration ? ` (${vehicle.registration})` : ""}</span> : null}
             </p>
             {office ? (
               <AssignForm
@@ -137,6 +176,8 @@ export default async function JobPage({
                 drivers={driverOptions(job, people, sameDay, timeOff)}
                 vehicles={vehicleOptions(job, vehicles, sameDay)}
               />
+            ) : mine ? (
+              <p className="text-sm">Your pay for this job: <b className="tabular">{money(job.driver_pay, cur)}</b></p>
             ) : null}
           </Card>
 
@@ -144,30 +185,49 @@ export default async function JobPage({
             <Card title="Status">
               <StatusButtons jobId={job.id} status={job.status} />
             </Card>
-          ) : job.driver_id === viewer.user_id && ["confirmed", "completed", "no_show"].includes(job.status) ? (
+          ) : mine && ["confirmed", "completed", "no_show"].includes(job.status) ? (
             <Card title="Finish the job">
-              <DriverDoneForm jobId={job.id} status={job.status} distanceKm={job.distance_km} driverNotes={job.driver_notes} />
+              <DriverDoneForm
+                jobId={job.id}
+                status={job.status}
+                distanceKm={job.distance_km}
+                driverNotes={job.driver_notes}
+                collect={toCollect ? money(job.collect_amount, cur) : null}
+                canFinish={job.pickup_date <= today}
+              />
             </Card>
           ) : null}
 
           {office && m ? (
-            <Card title="Money">
+            <Card title="Charges and pay">
               <dl className="flex flex-col gap-1.5 text-sm tabular">
-                <Row label="Price charged" value={money(m.price, cur)} strong />
-                <Row label="Driver pay" value={`− ${money(m.driver_cost, cur)}`} />
-                <Row label="Fuel and running" value={`− ${money(m.fuel_cost, cur)}`} />
-                <Row label="Tolls and parking" value={`− ${money(m.tolls_parking, cur)}`} />
-                <Row label="Other costs" value={`− ${money(m.other_cost, cur)}`} />
+                <Row label="Charge" value={money(charge(job), cur)} strong />
+                <Row label="Driver pay" value={`− ${money(job.driver_pay, cur)}`} />
                 <div className="my-1 border-t border-line" />
-                <Row label="Total costs" value={money(totalCost(m), cur)} />
                 <Row
-                  label="Profit"
-                  value={`${money(profit(m), cur)}${m.price > 0 ? ` (${Math.round((profit(m) / m.price) * 100)}%)` : ""}`}
+                  label={share}
+                  value={`${money(businessPay(job), cur)}${charge(job) > 0 ? ` (${Math.round((businessPay(job) / charge(job)) * 100)}%)` : ""}`}
                   strong
-                  tone={profit(m) < 0 ? "text-bad" : "text-ok"}
+                  tone={businessPay(job) < 0 ? "text-bad" : "text-ok"}
                 />
+                {expenses(job) > 0 ? (
+                  <>
+                    <Row label="Fuel" value={`− ${money(m.fuel_cost, cur)}`} />
+                    <Row label="Tolls and parking" value={`− ${money(m.tolls_parking, cur)}`} />
+                    <Row label="Other" value={`− ${money(m.other_cost, cur)}`} />
+                    <Row label="Profit after expenses" value={money(profit(job), cur)} strong />
+                  </>
+                ) : null}
               </dl>
-              <p className="mt-3 flex items-center gap-2 text-sm">Payment: <PaymentChip status={m.payment_status} /></p>
+              <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                Payment: <PaymentChip status={m.payment_status} />
+                {m.payment_status === "paid" && (m.payment_method || m.paid_on) ? (
+                  <span className="text-muted">
+                    {m.payment_method ? METHOD_LABEL[m.payment_method].toLowerCase() : ""}
+                    {m.paid_on ? ` on ${fmtDate(m.paid_on)}` : ""}
+                  </span>
+                ) : null}
+              </p>
             </Card>
           ) : null}
 
@@ -177,9 +237,9 @@ export default async function JobPage({
               <ActionSubmit
                 pendingLabel="Deleting…"
                 className="btn btn-sm btn-danger"
-                confirm={`Delete ${jobRef(job.job_no)} for good? If it was just called off, mark it cancelled instead so it still counts in your cancellation rate.`}
+                confirm={`Delete ${bookingRef(job)} for good? If it was just called off, mark it cancelled instead so it still counts in your cancellation rate.`}
               >
-                Delete job
+                Delete booking
               </ActionSubmit>
             </form>
           ) : null}

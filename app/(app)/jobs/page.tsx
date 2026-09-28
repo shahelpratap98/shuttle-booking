@@ -6,19 +6,20 @@ import { EmptyState, PageHeader } from "@/components/page-header";
 import { FilterSubmit } from "@/components/pending-buttons";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
 import { requireOffice } from "@/lib/auth";
-import { SERVICE_LABEL, SERVICES, STATUS_LABEL, STATUSES } from "@/lib/constants";
+import { NO_DRIVER, SERVICE_LABEL, SERVICES, STATUS_LABEL, STATUSES } from "@/lib/constants";
 import { addDays, fmtDay, fmtTime, isIsoDate, todayIn } from "@/lib/dates";
-import { jobRef, money, profit } from "@/lib/format";
+import { bookingRef, businessPay, charge, money, shareLabel } from "@/lib/format";
 import type { Job, JobQuery, JobStatus, ServiceType } from "@/lib/types";
 
-export const metadata: Metadata = { title: "Jobs" };
+export const metadata: Metadata = { title: "Bookings" };
 
 const VIEWS = {
-  available: "Available",
+  available: NO_DRIVER,
   upcoming: "Upcoming",
   today: "Today",
-  past: "Past",
+  collect: "Pay on the day",
   unpaid: "Waiting for payment",
+  past: "Past",
   all: "All",
 } as const;
 type View = keyof typeof VIEWS;
@@ -52,6 +53,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     case "past":
       Object.assign(query, { to: addDays(today, -1), order: "desc", limit: 300 });
       break;
+    case "collect":
+      Object.assign(query, { from: today, statuses: ["confirmed"] });
+      break;
     case "unpaid":
       Object.assign(query, { to: today, statuses: ["completed", "no_show"], order: "desc" });
       break;
@@ -67,6 +71,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const [found, people, vehicles] = await Promise.all([store.jobs(query), store.people(), store.vehicles()]);
   let jobs = service ? found.filter((j) => j.service_type === service) : found;
   if (view === "unpaid") jobs = jobs.filter((j) => j.money && j.money.payment_status !== "paid");
+  if (view === "collect") jobs = jobs.filter((j) => j.collect_amount > 0 && !j.collected_via);
+  const share = shareLabel(settings.business_name);
 
   const person = new Map(people.map((p) => [p.user_id, p]));
   const vehicleName = new Map(vehicles.map((v) => [v.id, v.name]));
@@ -87,17 +93,23 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     return `/jobs?${p}`;
   };
   const deleted = s("deleted") === "1";
-  const unpaidTotal = view === "unpaid" ? jobs.reduce((sum, j) => sum + (j.money?.price ?? 0), 0) : 0;
+  const unpaidTotal =
+    view === "unpaid" ? jobs.reduce((sum, j) => sum + charge(j), 0) : view === "collect" ? jobs.reduce((sum, j) => sum + j.collect_amount, 0) : 0;
 
   return (
     <>
       <PageHeader
-        title="Jobs"
-        intro={view === "available" ? "Upcoming jobs with no driver yet. Pick a driver and vehicle, then Assign." : undefined}
+        title="Bookings"
+        intro={
+          view === "available" ? "Upcoming bookings with the driver still TBC. Pick a driver and vehicle, then Assign."
+          : view === "collect" ? "Upcoming bookings where the driver collects the money on the day."
+          : undefined
+        }
         actions={
           <>
-            <a href={`/jobs/export?${new URLSearchParams({ from: query.from ?? "", to: query.to ?? "" })}`} className="btn btn-quiet">Download CSV</a>
-            <Link href="/jobs/new" className="btn btn-accent">New job</Link>
+            <a href={`/jobs/export?${new URLSearchParams({ from: query.from ?? "", to: query.to ?? "" })}`} className="btn btn-quiet">Download for Excel</a>
+            <Link href="/import" className="btn btn-quiet">Import</Link>
+            <Link href="/jobs/new" className="btn btn-accent">New booking</Link>
           </>
         }
       />
@@ -120,13 +132,13 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         <input type="hidden" name="view" value={view} />
         <div className="col-span-2 sm:w-64">
           <label htmlFor="q" className="field-label">Search</label>
-          <input id="q" name="q" defaultValue={search} placeholder="Name, phone, address, J-1024" className="field" />
+          <input id="q" name="q" defaultValue={search} placeholder="Name, phone, address, TW-…" className="field" />
         </div>
         <div>
           <label htmlFor="driver" className="field-label">Driver</label>
           <select id="driver" name="driver" defaultValue={driver} className="field">
             <option value="">Anyone</option>
-            <option value="none">No driver yet</option>
+            <option value="none">TBC</option>
             {people.map((p) => <option key={p.user_id} value={p.user_id}>{p.display_name}</option>)}
           </select>
         </div>
@@ -159,14 +171,14 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       </form>
 
       <p className="mb-2 text-sm text-muted">
-        {jobs.length} job{jobs.length === 1 ? "" : "s"}
-        {view === "unpaid" ? <>, <b className="text-text">{money(unpaidTotal, cur)}</b> to collect</> : null}
+        {jobs.length} booking{jobs.length === 1 ? "" : "s"}
+        {view === "unpaid" || view === "collect" ? <>, <b className="text-text">{money(unpaidTotal, cur)}</b> to collect</> : null}
         {(view === "past" || view === "all") && jobs.length >= (query.limit ?? 5000) ? <> (latest {query.limit}; narrow the dates to see more)</> : null}
       </p>
 
       {jobs.length === 0 ? (
-        <EmptyState title={view === "available" ? "Every upcoming job has a driver." : "No jobs match."}>
-          {view === "available" ? "New bookings without a driver will show up here." : <Link href={keep({ view })} className="link">Try different filters</Link>}
+        <EmptyState title={view === "available" ? "Every upcoming booking has a driver." : "No bookings match."}>
+          {view === "available" ? "New bookings with the driver TBC will show up here." : <Link href={keep({ view })} className="link">Try different filters</Link>}
         </EmptyState>
       ) : view === "available" && context ? (
         <ul className="flex flex-col gap-2">
@@ -179,8 +191,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                 </div>
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                    <Link href={`/jobs/${j.id}`} className="link">{jobRef(j.job_no)}</Link>
-                    {j.customer_name} · {j.passengers} pax
+                    <Link href={`/jobs/${j.id}`} className="link">{bookingRef(j)}</Link>
+                    {j.customer_name} · {j.passengers} pax{j.money ? ` · ${money(charge(j), cur)}` : ""}
+                    {j.is_shared ? <span className="chip bg-info-bg text-info">Shared</span> : null}
                     {j.status === "enquiry" ? <StatusChip status="enquiry" /> : null}
                   </p>
                   <p className="truncate text-sm text-muted">{j.pickup_address} → {j.dropoff_address}</p>
@@ -199,18 +212,19 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </ul>
       ) : (
         <div className="card overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[1050px] text-sm">
             <thead className="border-b border-line bg-surface-2">
               <tr>
-                <th className="th">Job</th>
-                <th className="th">Pickup</th>
-                <th className="th">Route</th>
-                <th className="th">Customer</th>
+                <th className="th">Date</th>
+                <th className="th">Pick up → Drop off</th>
+                <th className="th">Name</th>
                 <th className="th">Driver</th>
                 <th className="th">Status</th>
-                <th className="th text-right">Price</th>
-                <th className="th text-right">Profit</th>
+                <th className="th text-right">Charges</th>
+                <th className="th text-right">{share}</th>
+                <th className="th text-right">Driver pay</th>
                 <th className="th">Payment</th>
+                <th className="th">Reference</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -218,20 +232,31 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                 const d = j.driver_id ? person.get(j.driver_id) : null;
                 return (
                   <tr key={j.id} className="hover:bg-surface-2">
-                    <td className="td whitespace-nowrap"><Link href={`/jobs/${j.id}`} className="link">{jobRef(j.job_no)}</Link></td>
                     <td className="td whitespace-nowrap tabular">{j.pickup_date === today ? "Today" : fmtDay(j.pickup_date)} <span className="text-muted">{fmtTime(j.pickup_time)}</span></td>
                     <td className="td max-w-72">
-                      <p className="truncate">{j.pickup_address} → {j.dropoff_address}</p>
-                      <p className="text-xs text-muted">{SERVICE_LABEL[j.service_type]} · {j.passengers} pax{j.vehicle_id ? ` · ${vehicleName.get(j.vehicle_id) ?? ""}` : ""}</p>
+                      <Link href={`/jobs/${j.id}`} className="block truncate hover:underline">{j.pickup_address} → {j.dropoff_address}</Link>
+                      <p className="text-xs text-muted">
+                        {SERVICE_LABEL[j.service_type]} · {j.passengers} pax{j.vehicle_id ? ` · ${vehicleName.get(j.vehicle_id) ?? ""}` : ""}
+                        {j.is_shared ? " · shared" : ""}
+                        {j.linked_job_id ? " · return booked" : ""}
+                      </p>
                     </td>
                     <td className="td max-w-48 truncate">{j.customer_name}</td>
                     <td className="td whitespace-nowrap">
                       {d ? <span className="inline-flex items-center gap-2"><PersonDot colour={d.colour} />{d.display_name}</span> : <Unassigned />}
                     </td>
                     <td className="td"><StatusChip status={j.status} /></td>
-                    <td className="td text-right tabular">{j.money ? money(j.money.price, cur) : "–"}</td>
-                    <td className={`td text-right tabular ${profit(j.money) < 0 ? "text-bad" : ""}`}>{j.money ? money(profit(j.money), cur) : "–"}</td>
-                    <td className="td">{j.money ? <PaymentChip status={j.money.payment_status} /> : null}</td>
+                    <td className="td text-right tabular">{j.money ? money(charge(j), cur) : "–"}</td>
+                    <td className={`td text-right font-semibold tabular ${businessPay(j) < 0 ? "text-bad" : ""}`}>{j.money ? money(businessPay(j), cur) : "–"}</td>
+                    <td className="td text-right tabular">{money(j.driver_pay, cur)}</td>
+                    <td className="td">
+                      {j.collected_via ? (
+                        <span className="chip bg-ok-bg text-ok">Collected {j.collected_via}</span>
+                      ) : j.money ? (
+                        <PaymentChip status={j.money.payment_status} />
+                      ) : null}
+                    </td>
+                    <td className="td whitespace-nowrap"><Link href={`/jobs/${j.id}`} className="link">{bookingRef(j)}</Link></td>
                   </tr>
                 );
               })}

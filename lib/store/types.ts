@@ -1,4 +1,4 @@
-import type { Job, JobInput, JobMoney, JobQuery, JobStatus, Profile, Result, Role, Settings, TimeOff, Vehicle } from "@/lib/types";
+import type { Job, JobInput, JobMoney, JobQuery, JobStatus, PaymentMethod, Profile, Result, Role, Settings, TimeOff, Vehicle } from "@/lib/types";
 
 export interface Customer {
   name: string;
@@ -34,7 +34,7 @@ export interface Store {
   assignJob(id: string, driverId: string | null, vehicleId: string | null): Promise<Result>;
   setJobStatus(id: string, status: JobStatus): Promise<Result>;
   deleteJob(id: string): Promise<Result>;
-  driverUpdateJob(id: string, status: JobStatus, driverNotes: string | null, distanceKm: number | null): Promise<Result>;
+  driverUpdateJob(id: string, status: JobStatus, driverNotes: string | null, distanceKm: number | null, collectedVia: PaymentMethod | null): Promise<Result>;
   recentCustomers(): Promise<Customer[]>;
 
   people(): Promise<Profile[]>;

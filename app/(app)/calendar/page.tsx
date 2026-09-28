@@ -3,11 +3,11 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { PersonDot } from "@/components/chips";
 import { isOffice, requireViewer } from "@/lib/auth";
-import { UNASSIGNED_COLOUR, STATUS_LABEL } from "@/lib/constants";
+import { NO_DRIVER, UNASSIGNED_COLOUR, STATUS_LABEL } from "@/lib/constants";
 import {
   addDays, addMonths, eachDay, fmtDay, fmtLong, fmtMonth, fmtRange, fmtTime, isIsoDate, minutesOf, nowTimeIn, startOfMonth, startOfWeek, timeFromMinutes, todayIn, WEEKDAYS,
 } from "@/lib/dates";
-import { jobRef } from "@/lib/format";
+import { bookingRef } from "@/lib/format";
 import type { Job, Profile, TimeOff } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Calendar" };
@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: "Calendar" };
 
 type View = "day" | "week" | "month";
 const VIEWS: Record<View, string> = { day: "Day", week: "Week", month: "Month" };
-const NONE = "none"; // the "no driver yet" lane
+const NONE = "none"; // the "driver TBC" lane
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { viewer, store } = await requireViewer();
@@ -115,7 +115,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           {lanes.map((p) => (
             <FilterChip key={p.user_id} href={toggle(p.user_id)} on={visibleLane(p.user_id)} colour={p.colour} label={p.display_name} />
           ))}
-          <FilterChip href={toggle(NONE)} on={visibleLane(null)} colour={UNASSIGNED_COLOUR} label={`No driver yet${unassignedCount ? ` (${unassignedCount})` : ""}`} dashed />
+          <FilterChip href={toggle(NONE)} on={visibleLane(null)} colour={UNASSIGNED_COLOUR} label={`${NO_DRIVER}${unassignedCount ? ` (${unassignedCount})` : ""}`} dashed />
           <Link href={href({ cancelled: showCancelled ? "" : "1" })} className="ml-1 text-sm font-semibold text-muted underline-offset-4 hover:text-text hover:underline">
             {showCancelled ? "Hide cancelled" : "Show cancelled"}
           </Link>
@@ -184,7 +184,15 @@ function pillStyle(j: Job, colour: string | undefined): { className: string; sty
 
 function JobPill({ job, colour, children, className = "", style }: { job: Job; colour?: string; children: ReactNode; className?: string; style?: CSSProperties }) {
   const p = pillStyle(job, colour);
-  const tip = `${jobRef(job.job_no)} · ${fmtTime(job.pickup_time)} · ${job.customer_name} · ${job.passengers} pax\n${job.pickup_address} → ${job.dropoff_address}${job.status !== "confirmed" ? `\n${STATUS_LABEL[job.status]}` : ""}`;
+  const tip = [
+    `${bookingRef(job)} · ${fmtTime(job.pickup_time)} · ${job.customer_name} · ${job.passengers} pax`,
+    `${job.pickup_address} → ${job.dropoff_address}`,
+    job.status !== "confirmed" ? STATUS_LABEL[job.status] : "",
+    job.collect_amount > 0 && !job.collected_via ? "$ Driver collects payment" : "",
+    job.is_shared ? "Shared ride" : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
   return (
     <Link href={`/jobs/${job.id}`} title={tip} className={`block overflow-hidden rounded-md text-left hover:brightness-110 ${p.className} ${className}`} style={{ ...p.style, ...style }}>
       {children}
@@ -217,7 +225,7 @@ function WeekBoard({
   days: string[]; lanes: Profile[]; showUnassigned: boolean; jobs: Job[]; off: TimeOff[]; office: boolean; today: string; dayHref: (d: string) => string;
 }) {
   const rows: { id: string | null; name: string; colour: string }[] = [
-    ...(showUnassigned ? [{ id: null, name: "No driver yet", colour: UNASSIGNED_COLOUR }] : []),
+    ...(showUnassigned ? [{ id: null, name: NO_DRIVER, colour: UNASSIGNED_COLOUR }] : []),
     ...lanes.map((p) => ({ id: p.user_id, name: p.display_name, colour: p.colour })),
   ];
   return (
@@ -259,7 +267,7 @@ function WeekBoard({
                       {offToday ? <OffBlock t={offToday} /> : null}
                       {cell.map((j) => (
                         <JobPill key={j.id} job={j} colour={r.colour} className="px-1.5 py-1 text-[12px] leading-tight">
-                          <span className="block font-semibold tabular"><Tick job={j} />{fmtTime(j.pickup_time)} · {j.passengers}p</span>
+                          <span className="block font-semibold tabular"><Tick job={j} />{fmtTime(j.pickup_time)} · {j.passengers}p{j.collect_amount > 0 && !j.collected_via ? " · $" : ""}{j.is_shared ? " · shared" : ""}</span>
                           <span className="block truncate opacity-90">{j.customer_name}</span>
                         </JobPill>
                       ))}
@@ -302,7 +310,7 @@ function DayTimeline({
   const pos = (min: number) => `${((min - start) / span) * 100}%`;
 
   const rows: { id: string | null; name: string; colour: string }[] = [
-    ...(showUnassigned ? [{ id: null, name: "No driver yet", colour: UNASSIGNED_COLOUR }] : []),
+    ...(showUnassigned ? [{ id: null, name: NO_DRIVER, colour: UNASSIGNED_COLOUR }] : []),
     ...lanes.map((p) => ({ id: p.user_id, name: p.display_name, colour: p.colour })),
   ];
 
@@ -449,7 +457,7 @@ function Key() {
   return (
     <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted print:hidden">
       <li className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-5 rounded bg-series-1" /> Booked (driver&rsquo;s colour)</li>
-      <li className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-5 rounded border-2 border-dashed" style={{ borderColor: UNASSIGNED_COLOUR }} /> No driver yet</li>
+      <li className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-5 rounded border-2 border-dashed" style={{ borderColor: UNASSIGNED_COLOUR }} /> {NO_DRIVER}</li>
       <li className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-5 rounded border-2 border-series-1" style={{ background: "repeating-linear-gradient(135deg, var(--color-info-bg) 0 3px, var(--color-surface) 3px 6px)" }} /> ? Enquiry</li>
       <li>✓ Done</li>
       <li className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-5 rounded" style={{ background: "repeating-linear-gradient(45deg, var(--color-surface-2) 0 3px, var(--color-bg) 3px 6px)" }} /> Time off</li>

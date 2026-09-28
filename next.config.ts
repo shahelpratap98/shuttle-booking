@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // The parent folder has its own lockfile; this app is its own root.
   turbopack: { root: __dirname },
+  // Reads uploaded spreadsheets on the server; not bundled.
+  serverExternalPackages: ["exceljs"],
+  experimental: {
+    // Spreadsheet uploads go through a server action (the import checks for 5 MB itself).
+    serverActions: { bodySizeLimit: "6mb" },
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },

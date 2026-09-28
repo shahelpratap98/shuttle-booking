@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/action-form";
 import { requireOffice, requireViewer } from "@/lib/auth";
 import { parseJobForm } from "@/lib/job-form";
-import type { JobStatus } from "@/lib/types";
+import type { JobStatus, PaymentMethod } from "@/lib/types";
 
 const text = (fd: FormData, name: string) => String(fd.get(name) ?? "").trim();
 
@@ -66,8 +66,11 @@ export async function driverUpdate(_prev: ActionState, fd: FormData): Promise<Ac
   if (km !== null && (!Number.isFinite(km) || km < 0 || km > 5000)) return { ok: false, message: "Distance must be between 0 and 5000 km." };
 
   // Only works for the job's own driver (checked by the database).
-  const res = await store.driverUpdateJob(id, status, text(fd, "driver_notes").slice(0, 1000) || null, km);
+  const via = text(fd, "collected_via");
+  if (via && !["cash", "card", "online", "bank"].includes(via)) return { ok: false, message: "Say how they paid." };
+  const res = await store.driverUpdateJob(id, status, text(fd, "driver_notes").slice(0, 1000) || null, km, (via || null) as PaymentMethod | null);
   if (!res.ok) return { ok: false, message: res.error };
   refreshJobs(id);
-  return { ok: true, message: status === "completed" ? "Marked as done. Thanks!" : status === "no_show" ? "Marked as a no-show." : "Saved." };
+  const paidNote = via ? ` Payment recorded (${via}).` : "";
+  return { ok: true, message: (status === "completed" ? "Marked as done. Thanks!" : status === "no_show" ? "Marked as a no-show." : "Saved.") + paidNote };
 }
