@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+import { saveSettings } from "@/app/(app)/setup-actions";
+import { ActionForm } from "@/components/action-form";
+import { PageHeader } from "@/components/page-header";
+import { requireOwner } from "@/lib/auth";
+
+export const metadata: Metadata = { title: "Settings" };
+
+const ZONES = ["Pacific/Auckland", "Pacific/Chatham", "Australia/Sydney", "Australia/Melbourne", "Australia/Brisbane", "Australia/Adelaide", "Australia/Perth", "Pacific/Fiji", "Europe/London", "America/New_York", "America/Los_Angeles", "Asia/Singapore"];
+
+export default async function SettingsPage() {
+  const { store } = await requireOwner();
+  const s = await store.settings();
+  const zones = ZONES.includes(s.timezone) ? ZONES : [s.timezone, ...ZONES];
+
+  return (
+    <>
+      <PageHeader title="Settings" />
+      <section className="card max-w-xl p-4">
+        <ActionForm action={saveSettings} submitLabel="Save settings" className="flex flex-col gap-4">
+          <div>
+            <label htmlFor="business_name" className="field-label">Business name</label>
+            <input id="business_name" name="business_name" required maxLength={80} defaultValue={s.business_name} className="field" />
+            <p className="field-hint">Shown in the top bar.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="currency" className="field-label">Currency</label>
+              <input id="currency" name="currency" required maxLength={3} defaultValue={s.currency} className="field uppercase" />
+              <p className="field-hint">NZD, AUD, USD…</p>
+            </div>
+            <div>
+              <label htmlFor="timezone" className="field-label">Time zone</label>
+              <select id="timezone" name="timezone" defaultValue={s.timezone} className="field">
+                {zones.map((z) => <option key={z} value={z}>{z.replace("_", " ")}</option>)}
+              </select>
+              <p className="field-hint">Decides what &ldquo;today&rdquo; is.</p>
+            </div>
+          </div>
+        </ActionForm>
+      </section>
+    </>
+  );
+}

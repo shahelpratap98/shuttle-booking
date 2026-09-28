@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+/* Tokens. Utilities read these through var(--color-*), so the dark block
+   below swaps the whole app by redefining them. */
+@theme {
+  --color-bg: #f5f5f2;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f0ec;
+  --color-text: #141413;
+  --color-muted: #5b5a55;
+  --color-line: #e4e3de;
+  --color-line-2: #d3d2cc;
+
+  /* top bar and primary buttons */
+  --color-ink: #16181d;
+  --color-ink-2: #262a31;
+  --color-on-ink: #ffffff;
+  /* brand accent: road-marking amber, used sparingly */
+  --color-accent: #f5a524;
+  --color-accent-text: #8a5300;
+
+  /* status, separate from the brand accent */
+  --color-ok: #1b6b3a;
+  --color-ok-bg: #e2f2e6;
+  --color-warn: #8a5300;
+  --color-warn-bg: #fbeed3;
+  --color-bad: #a3282a;
+  --color-bad-bg: #f9e2e1;
+  --color-info: #1d4f91;
+  --color-info-bg: #e3edfa;
+  --color-idle: #55544f;
+  --color-idle-bg: #ecebe7;
+
+  /* charts (validated: dataviz reference slots 1-3) */
+  --color-series-1: #2a78d6;
+  --color-series-2: #eb6834;
+  --color-series-3: #1baf7a;
+  --color-grid: #e9e8e3;
+
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-bg: #111110;
+    --color-surface: #1a1a19;
+    --color-surface-2: #242422;
+    --color-text: #f2f2ef;
+    --color-muted: #aeada5;
+    --color-line: #31312e;
+    --color-line-2: #45443f;
+    --color-ink: #0a0a09;
+    --color-ink-2: #2b2b28;
+    --color-accent-text: #f5b84e;
+    --color-ok: #7fd49b;
+    --color-ok-bg: #173522;
+    --color-warn: #f2c26b;
+    --color-warn-bg: #3a2c10;
+    --color-bad: #f39a98;
+    --color-bad-bg: #401a1a;
+    --color-info: #9cc3f5;
+    --color-info-bg: #16294a;
+    --color-idle: #b9b8b0;
+    --color-idle-bg: #2c2c29;
+    --color-series-1: #3987e5;
+    --color-series-2: #d95926;
+    --color-series-3: #199e70;
+    --color-grid: #2c2c29;
+  }
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phones: fingers, not pointers. 44px is the smallest comfortable target,
+   and iOS zooms into inputs under 16px. */
+@media (max-width: 639px) {
+  .btn,
+  .field {
+    min-height: 2.75rem;
+  }
+  .field {
+    font-size: 16px;
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-lg border border-line-2 bg-surface px-3 py-2 text-[15px] text-text
+      placeholder:text-muted/70 disabled:bg-surface-2 disabled:text-muted;
+  }
+  .field-label {
+    @apply mb-1 block text-[13px] font-semibold text-text;
+  }
+  .field-hint {
+    @apply mt-1 text-xs text-muted;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[15px] font-semibold whitespace-nowrap
+      transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  .btn-primary {
+    @apply bg-ink text-on-ink hover:bg-ink-2;
+  }
+  .btn-accent {
+    @apply bg-accent text-[#1b1300] hover:brightness-95;
+  }
+  .btn-quiet {
+    @apply border border-line-2 bg-surface text-text hover:bg-surface-2;
+  }
+  .btn-danger {
+    @apply border border-bad/40 bg-surface text-bad hover:bg-bad-bg;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-surface;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap;
+  }
+  .link {
+    @apply font-semibold text-accent-text underline-offset-4 hover:underline;
+  }
+  .th {
+    @apply px-3 py-2 text-left text-xs font-semibold tracking-wide text-muted uppercase;
+  }
+  .td {
+    @apply px-3 py-2 align-top;
+  }
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11px;
+  }
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+  nextjs-portal {
+    display: none !important;
+  }
+}
