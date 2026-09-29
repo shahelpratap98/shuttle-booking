@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: { default: "Shuttle bookings", template: "%s · Shuttle bookings" },
   description: "Bookings, dispatch, team calendar and business dashboard.",
   robots: { index: false, follow: false },
+  // Opened from the home screen on an iPhone: full screen, named "Trekway".
+  appleWebApp: { capable: true, title: "Trekway", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {

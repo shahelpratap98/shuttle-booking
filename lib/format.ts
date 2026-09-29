@@ -46,6 +46,11 @@ export function mapsLink(from: string, to: string): string {
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}`;
 }
 
+// Directions from wherever the phone is now.
+export function navigateLink(to: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(to)}&travelmode=driving`;
+}
+
 // wa.me needs the number in international form without "+". NZ numbers are
 // written 021…, so a leading 0 becomes 64. Returns null if it isn't a number.
 export function whatsappNumber(phone: string | null | undefined): string | null {

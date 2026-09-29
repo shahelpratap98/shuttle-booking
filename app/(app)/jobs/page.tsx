@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AssignForm } from "@/app/(app)/jobs/job-controls";
 import { PaymentChip, PersonDot, StatusChip, Unassigned } from "@/components/chips";
+import { MoreFilters } from "@/components/more-filters";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { FilterSubmit } from "@/components/pending-buttons";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
@@ -132,38 +133,40 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         <input type="hidden" name="view" value={view} />
         <div className="col-span-2 sm:w-64">
           <label htmlFor="q" className="field-label">Search</label>
-          <input id="q" name="q" defaultValue={search} placeholder="Name, phone, address, TW-…" className="field" />
+          <input id="q" name="q" type="search" defaultValue={search} placeholder="Name, phone, address, TW-…" className="field" />
         </div>
-        <div>
-          <label htmlFor="driver" className="field-label">Driver</label>
-          <select id="driver" name="driver" defaultValue={driver} className="field">
-            <option value="">Anyone</option>
-            <option value="none">TBC</option>
-            {people.map((p) => <option key={p.user_id} value={p.user_id}>{p.display_name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="status" className="field-label">Status</label>
-          <select id="status" name="status" defaultValue={status} className="field">
-            <option value="">Any</option>
-            {STATUSES.map((x) => <option key={x} value={x}>{STATUS_LABEL[x]}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="service" className="field-label">Service</label>
-          <select id="service" name="service" defaultValue={service} className="field">
-            <option value="">Any</option>
-            {SERVICES.map((x) => <option key={x} value={x}>{SERVICE_LABEL[x]}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="from" className="field-label">From</label>
-          <input id="from" name="from" type="date" defaultValue={from} className="field" />
-        </div>
-        <div>
-          <label htmlFor="to" className="field-label">To</label>
-          <input id="to" name="to" type="date" defaultValue={to} className="field" />
-        </div>
+        <MoreFilters active={Boolean(driver || status || service || from || to)}>
+          <div>
+            <label htmlFor="driver" className="field-label">Driver</label>
+            <select id="driver" name="driver" defaultValue={driver} className="field">
+              <option value="">Anyone</option>
+              <option value="none">TBC</option>
+              {people.map((p) => <option key={p.user_id} value={p.user_id}>{p.display_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="status" className="field-label">Status</label>
+            <select id="status" name="status" defaultValue={status} className="field">
+              <option value="">Any</option>
+              {STATUSES.map((x) => <option key={x} value={x}>{STATUS_LABEL[x]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="service" className="field-label">Service</label>
+            <select id="service" name="service" defaultValue={service} className="field">
+              <option value="">Any</option>
+              {SERVICES.map((x) => <option key={x} value={x}>{SERVICE_LABEL[x]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="from" className="field-label">From</label>
+            <input id="from" name="from" type="date" defaultValue={from} className="field" />
+          </div>
+          <div>
+            <label htmlFor="to" className="field-label">To</label>
+            <input id="to" name="to" type="date" defaultValue={to} className="field" />
+          </div>
+        </MoreFilters>
         <div className="col-span-2 flex gap-2 sm:col-span-1">
           <FilterSubmit className="btn btn-primary flex-1">Filter</FilterSubmit>
           {search || driver || status || service || from || to ? <Link href={`/jobs?view=${view}`} className="btn btn-quiet">Clear</Link> : null}
@@ -211,58 +214,90 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           ))}
         </ul>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[1050px] text-sm">
-            <thead className="border-b border-line bg-surface-2">
-              <tr>
-                <th className="th">Date</th>
-                <th className="th">Pick up → Drop off</th>
-                <th className="th">Name</th>
-                <th className="th">Driver</th>
-                <th className="th">Status</th>
-                <th className="th text-right">Charges</th>
-                <th className="th text-right">{share}</th>
-                <th className="th text-right">Driver pay</th>
-                <th className="th">Payment</th>
-                <th className="th">Reference</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {jobs.map((j) => {
-                const d = j.driver_id ? person.get(j.driver_id) : null;
-                return (
-                  <tr key={j.id} className="hover:bg-surface-2">
-                    <td className="td whitespace-nowrap tabular">{j.pickup_date === today ? "Today" : fmtDay(j.pickup_date)} <span className="text-muted">{fmtTime(j.pickup_time)}</span></td>
-                    <td className="td max-w-72">
-                      <Link href={`/jobs/${j.id}`} className="block truncate hover:underline">{j.pickup_address} → {j.dropoff_address}</Link>
-                      <p className="text-xs text-muted">
-                        {SERVICE_LABEL[j.service_type]} · {j.passengers} pax{j.vehicle_id ? ` · ${vehicleName.get(j.vehicle_id) ?? ""}` : ""}
-                        {j.is_shared ? " · shared" : ""}
-                        {j.linked_job_id ? " · return booked" : ""}
-                      </p>
-                    </td>
-                    <td className="td max-w-48 truncate">{j.customer_name}</td>
-                    <td className="td whitespace-nowrap">
-                      {d ? <span className="inline-flex items-center gap-2"><PersonDot colour={d.colour} />{d.display_name}</span> : <Unassigned />}
-                    </td>
-                    <td className="td"><StatusChip status={j.status} /></td>
-                    <td className="td text-right tabular">{j.money ? money(charge(j), cur) : "–"}</td>
-                    <td className={`td text-right font-semibold tabular ${businessPay(j) < 0 ? "text-bad" : ""}`}>{j.money ? money(businessPay(j), cur) : "–"}</td>
-                    <td className="td text-right tabular">{money(j.driver_pay, cur)}</td>
-                    <td className="td">
+        <>
+          {/* Phones: one card per booking. The full table needs a wider screen. */}
+          <ul className="card divide-y divide-line overflow-hidden sm:hidden">
+            {jobs.map((j) => {
+              const d = j.driver_id ? person.get(j.driver_id) : null;
+              return (
+                <li key={j.id}>
+                  <Link href={`/jobs/${j.id}`} className="flex flex-col gap-1 px-4 py-3 hover:bg-surface-2">
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="font-bold tabular">
+                        {j.pickup_date === today ? "Today" : fmtDay(j.pickup_date)} <span className="font-semibold text-muted">{fmtTime(j.pickup_time)}</span>
+                      </span>
+                      <span className="font-semibold tabular">{j.money ? money(charge(j), cur) : ""}</span>
+                    </span>
+                    <span className="truncate font-semibold">{j.customer_name} · {j.passengers} pax</span>
+                    <span className="truncate text-sm text-muted">{j.pickup_address} → {j.dropoff_address}</span>
+                    <span className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                      {d ? <span className="inline-flex items-center gap-1.5 font-semibold"><PersonDot colour={d.colour} />{d.display_name}</span> : <Unassigned />}
+                      {j.status !== "confirmed" ? <StatusChip status={j.status} /> : null}
                       {j.collected_via ? (
                         <span className="chip bg-ok-bg text-ok">Collected {j.collected_via}</span>
                       ) : j.money ? (
                         <PaymentChip status={j.money.payment_status} />
                       ) : null}
-                    </td>
-                    <td className="td whitespace-nowrap"><Link href={`/jobs/${j.id}`} className="link">{bookingRef(j)}</Link></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      {j.is_shared ? <span className="chip bg-info-bg text-info">Shared</span> : null}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="card hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[1050px] text-sm">
+              <thead className="border-b border-line bg-surface-2">
+                <tr>
+                  <th className="th">Date</th>
+                  <th className="th">Pick up → Drop off</th>
+                  <th className="th">Name</th>
+                  <th className="th">Driver</th>
+                  <th className="th">Status</th>
+                  <th className="th text-right">Charges</th>
+                  <th className="th text-right">{share}</th>
+                  <th className="th text-right">Driver pay</th>
+                  <th className="th">Payment</th>
+                  <th className="th">Reference</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {jobs.map((j) => {
+                  const d = j.driver_id ? person.get(j.driver_id) : null;
+                  return (
+                    <tr key={j.id} className="hover:bg-surface-2">
+                      <td className="td whitespace-nowrap tabular">{j.pickup_date === today ? "Today" : fmtDay(j.pickup_date)} <span className="text-muted">{fmtTime(j.pickup_time)}</span></td>
+                      <td className="td max-w-72">
+                        <Link href={`/jobs/${j.id}`} className="block truncate hover:underline">{j.pickup_address} → {j.dropoff_address}</Link>
+                        <p className="text-xs text-muted">
+                          {SERVICE_LABEL[j.service_type]} · {j.passengers} pax{j.vehicle_id ? ` · ${vehicleName.get(j.vehicle_id) ?? ""}` : ""}
+                          {j.is_shared ? " · shared" : ""}
+                          {j.linked_job_id ? " · return booked" : ""}
+                        </p>
+                      </td>
+                      <td className="td max-w-48 truncate">{j.customer_name}</td>
+                      <td className="td whitespace-nowrap">
+                        {d ? <span className="inline-flex items-center gap-2"><PersonDot colour={d.colour} />{d.display_name}</span> : <Unassigned />}
+                      </td>
+                      <td className="td"><StatusChip status={j.status} /></td>
+                      <td className="td text-right tabular">{j.money ? money(charge(j), cur) : "–"}</td>
+                      <td className={`td text-right font-semibold tabular ${businessPay(j) < 0 ? "text-bad" : ""}`}>{j.money ? money(businessPay(j), cur) : "–"}</td>
+                      <td className="td text-right tabular">{money(j.driver_pay, cur)}</td>
+                      <td className="td">
+                        {j.collected_via ? (
+                          <span className="chip bg-ok-bg text-ok">Collected {j.collected_via}</span>
+                        ) : j.money ? (
+                          <PaymentChip status={j.money.payment_status} />
+                        ) : null}
+                      </td>
+                      <td className="td whitespace-nowrap"><Link href={`/jobs/${j.id}`} className="link">{bookingRef(j)}</Link></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </>
   );

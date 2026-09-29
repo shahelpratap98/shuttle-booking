@@ -26,11 +26,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: "/time-off", label: "Time off" },
         { href: "/vehicles", label: "Vehicles" },
         ...(isOwner(viewer.role) ? [{ href: "/team", label: "Team" }, { href: "/settings", label: "Settings" }] : []),
+        { href: "/guide", label: "Help" },
       ]
     : [
         { href: "/my-jobs", label: "My jobs" },
         { href: "/calendar", label: "Calendar" },
         { href: "/time-off", label: "Time off" },
+        { href: "/guide", label: "Help" },
       ];
 
   const primaryHrefs = office ? ["/dashboard", "/jobs", "/calendar"] : ["/my-jobs", "/calendar", "/time-off"];

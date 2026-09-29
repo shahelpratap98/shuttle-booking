@@ -20,7 +20,11 @@ Driver Pay | More Info | Flight Information | Booking Reference).
 - **Return trips** (the -OUT / -RET legs) are linked; **shared rides** can run
   together in one vehicle without being flagged as a clash.
 - **Drivers** sign in on their phone and see only their own jobs: where to go,
-  who to call, directions, what to collect, their pay, and "Mark done".
+  big Call / Text / directions buttons, what to collect, their pay, and
+  "Mark done". The site can be added to the home screen and opens like an app.
+- **Built for phones**: bottom menu, the calendar and bookings become simple
+  lists on a small screen, filters fold away.
+- **Help** (`/guide`): how to use the app, by role. Drivers see only their part.
 - **Team calendar** (like Teamup): a colour per person. Day timeline per
   driver, Week dispatch board (drivers × days), Month overview. Time off shows
   on it. `$` marks jobs where the driver collects payment.

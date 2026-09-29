@@ -7,12 +7,13 @@ import { JobCard } from "@/app/(app)/jobs/job-card";
 import { AssignForm, DriverDoneForm, StatusButtons } from "@/app/(app)/jobs/job-controls";
 import { PaymentChip, PersonDot, StatusChip, Unassigned } from "@/components/chips";
 import { ActionSubmit } from "@/components/pending-buttons";
+import { TripActions } from "@/components/trip-actions";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
 import { isOffice, requireViewer } from "@/lib/auth";
 import { jobWarnings } from "@/lib/clashes";
 import { METHOD_LABEL, SERVICE_LABEL, SOURCE_LABEL } from "@/lib/constants";
 import { fmtDate, fmtDay, fmtDuration, fmtLong, fmtTime, minutesOf, timeFromMinutes, todayIn } from "@/lib/dates";
-import { bookingRef, businessPay, charge, expenses, jobRef, mapsLink, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
+import { bookingRef, businessPay, charge, expenses, jobRef, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
 import { jobCardText } from "@/lib/job-card";
 
 export const metadata: Metadata = { title: "Booking" };
@@ -114,9 +115,9 @@ export default async function JobPage({
                 <p className="text-[17px] font-semibold">{job.dropoff_address}</p>
               </li>
             </ol>
-            <a href={mapsLink(job.pickup_address, job.dropoff_address)} target="_blank" rel="noreferrer" className="link mt-3 inline-block text-sm print:hidden">
-              Open directions in Google Maps
-            </a>
+            <div className="mt-4">
+              <TripActions phone={job.customer_phone} pickup={job.pickup_address} dropoff={job.dropoff_address} />
+            </div>
             <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
               <Fact label="# of people" value={job.passengers} />
               <Fact label="Bags" value={job.luggage} />

@@ -122,25 +122,40 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </div>
       ) : null}
 
-      {view === "day" ? (
-        <DayTimeline date={date} lanes={shownLanes} showUnassigned={office && visibleLane(null)} jobs={jobs} off={off} office={office} today={today} now={nowTimeIn(settings.timezone)} />
-      ) : view === "week" ? (
-        <WeekBoard days={eachDay(from, to)} lanes={shownLanes} showUnassigned={office && visibleLane(null)} jobs={jobs} off={off} office={office} today={today} dayHref={(d) => href({ view: "day", date: d })} />
-      ) : (
-        <MonthGrid
-          days={eachDay(from, to)}
-          month={date.slice(0, 7)}
+      {/* Phones: a plain list, day by day. The grids need a wider screen. */}
+      <div className="sm:hidden">
+        <Agenda
+          days={view === "month" ? eachDay(from, to).filter((d) => d.startsWith(date.slice(0, 7))) : eachDay(from, to)}
+          skipEmpty={view === "month"}
           jobs={jobs}
           off={off}
           office={office}
           today={today}
           colourOf={colourOf}
           nameOf={nameOf}
-          dayHref={(d) => href({ view: "day", date: d })}
         />
-      )}
+      </div>
 
-      <Key />
+      <div className="hidden sm:block">
+        {view === "day" ? (
+          <DayTimeline date={date} lanes={shownLanes} showUnassigned={office && visibleLane(null)} jobs={jobs} off={off} office={office} today={today} now={nowTimeIn(settings.timezone)} />
+        ) : view === "week" ? (
+          <WeekBoard days={eachDay(from, to)} lanes={shownLanes} showUnassigned={office && visibleLane(null)} jobs={jobs} off={off} office={office} today={today} dayHref={(d) => href({ view: "day", date: d })} />
+        ) : (
+          <MonthGrid
+            days={eachDay(from, to)}
+            month={date.slice(0, 7)}
+            jobs={jobs}
+            off={off}
+            office={office}
+            today={today}
+            colourOf={colourOf}
+            nameOf={nameOf}
+            dayHref={(d) => href({ view: "day", date: d })}
+          />
+        )}
+        <Key />
+      </div>
     </>
   );
 }
@@ -216,6 +231,74 @@ function OffBlock({ t, compact }: { t: TimeOff; compact?: boolean }) {
 
 const isOff = (t: TimeOff, userId: string, d: string) => t.user_id === userId && t.starts_on <= d && t.ends_on >= d;
 const byTime = (a: Job, b: Job) => a.pickup_time.localeCompare(b.pickup_time);
+
+// ------------------------------------------------------------------ phone list
+
+function Agenda({
+  days, skipEmpty, jobs, off, office, today, colourOf, nameOf,
+}: {
+  days: string[]; skipEmpty: boolean; jobs: Job[]; off: TimeOff[]; office: boolean; today: string;
+  colourOf: Map<string, string>; nameOf: Map<string, string>;
+}) {
+  const shown = days
+    .map((d) => ({ d, list: jobs.filter((j) => j.pickup_date === d).sort(byTime), offs: off.filter((t) => t.starts_on <= d && t.ends_on >= d) }))
+    .filter((x) => !skipEmpty || x.list.length || x.offs.length);
+
+  if (shown.length === 0) return <p className="card p-4 text-sm text-muted">Nothing booked.</p>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {shown.map(({ d, list, offs }) => (
+        <section key={d} aria-label={fmtDay(d)}>
+          <h2 className={`mb-1.5 flex items-center gap-2 text-sm font-bold uppercase ${d === today ? "text-accent-text" : "text-muted"}`}>
+            {fmtDay(d)}
+            {d === today ? <span className="rounded bg-accent px-1.5 text-[11px] text-[#1b1300]">TODAY</span> : null}
+            {office ? <Link href={`/jobs/new?date=${d}`} className="ml-auto rounded-md px-2 py-1 text-xs normal-case text-muted hover:bg-surface-2">+ Add</Link> : null}
+          </h2>
+          {list.length === 0 && offs.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line-2 px-4 py-3 text-sm text-muted">Nothing booked</p>
+          ) : (
+            <ul className="card divide-y divide-line overflow-hidden">
+              {offs.map((t) => (
+                <li key={t.id} className="px-4 py-2.5 text-sm font-semibold text-muted" style={{ background: "repeating-linear-gradient(45deg, var(--color-surface-2) 0 6px, var(--color-surface) 6px 12px)" }}>
+                  {nameOf.get(t.user_id) ?? "Someone"} off{t.note ? `: ${t.note}` : ""}
+                </li>
+              ))}
+              {list.map((j) => {
+                const colour = j.driver_id ? colourOf.get(j.driver_id) : undefined;
+                const gone = j.status === "cancelled" || j.status === "no_show";
+                return (
+                  <li key={j.id}>
+                    <Link href={`/jobs/${j.id}`} className={`flex min-h-14 items-stretch gap-3 px-3 py-2.5 hover:bg-surface-2 ${gone ? "opacity-60" : ""}`}>
+                      <span
+                        aria-hidden="true"
+                        className={`w-1.5 shrink-0 rounded-full ${j.driver_id ? "" : "border-2 border-dashed"}`}
+                        style={j.driver_id ? { background: colour ?? UNASSIGNED_COLOUR } : { borderColor: UNASSIGNED_COLOUR }}
+                      />
+                      <span className="w-[4.5rem] shrink-0 pt-px font-bold tabular">{fmtTime(j.pickup_time)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className={`block truncate font-semibold ${gone ? "line-through" : ""}`}>
+                          <Tick job={j} />{j.customer_name} · {j.passengers}p
+                        </span>
+                        <span className="block truncate text-sm text-muted">{j.pickup_address} → {j.dropoff_address}</span>
+                        <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs font-semibold text-muted">
+                          {office ? <span>{j.driver_id ? nameOf.get(j.driver_id) : NO_DRIVER}</span> : null}
+                          {j.collect_amount > 0 && !j.collected_via ? <span className="text-info">$ collect</span> : null}
+                          {j.is_shared ? <span>Shared</span> : null}
+                          {j.status !== "confirmed" ? <span>{STATUS_LABEL[j.status]}</span> : null}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
 
 // ------------------------------------------------------------------ week board
 
