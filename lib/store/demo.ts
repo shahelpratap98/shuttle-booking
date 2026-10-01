@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { customerKey, customersFrom, earlierBookings } from "@/lib/customers";
 import { todayIn } from "@/lib/dates";
 import type { Job, JobMoney, JobQuery, Profile, Result, TimeOff, Vehicle } from "@/lib/types";
 import { seedDemo, type DemoData } from "./demo-seed";
@@ -104,6 +105,7 @@ class DemoStore implements Store {
       if (q.driverId && j.driver_id !== q.driverId) return false;
       if (q.unassigned && j.driver_id !== null) return false;
       if (q.statuses?.length && !q.statuses.includes(j.status)) return false;
+      if (q.customerKey && customerKey(j.customer_name, j.customer_phone) !== q.customerKey) return false;
       if (num) return j.job_no === Number(num);
       if (s) {
         const hay = [j.booking_ref, j.customer_name, j.customer_phone, j.customer_email, j.pickup_address, j.dropoff_address, j.flight_no, j.notes]
@@ -209,12 +211,27 @@ class DemoStore implements Store {
 
   async recentCustomers(): Promise<Customer[]> {
     if (!this.office()) return [];
-    const seen = new Map<string, Customer>();
-    for (const j of [...data().jobs].sort((a, b) => b.created_at.localeCompare(a.created_at))) {
-      const key = j.customer_name.trim().toLowerCase();
-      if (!seen.has(key)) seen.set(key, { name: j.customer_name, phone: j.customer_phone, email: j.customer_email });
+    return customersFrom([...data().jobs].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+  }
+
+  async repeatCounts(ids: string[]): Promise<Record<string, number>> {
+    const all = data().jobs;
+    const out: Record<string, number> = {};
+    for (const id of ids) {
+      const j = all.find((x) => x.id === id);
+      if (j && this.visible(j)) out[id] = earlierBookings(j, all);
     }
-    return [...seen.values()];
+    return out;
+  }
+
+  async weeklyTarget(): Promise<number | null> {
+    return this.office() ? (data().weeklyTarget ?? null) : null;
+  }
+
+  async saveWeeklyTarget(amount: number | null): Promise<Result> {
+    if (!this.owner()) return fail("You don't have permission to do that.");
+    data().weeklyTarget = amount;
+    return saved(done);
   }
 
   async people() {

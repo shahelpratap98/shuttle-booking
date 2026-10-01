@@ -136,6 +136,26 @@ ok(offSeenByB.length === 0, "drivers don't see each other's time off");
 const offSeenByDisp = await as(DISP, async (tx) => (await tx.query(`select * from public.time_off`)).rows);
 ok(offSeenByDisp.length === 1, "the office sees everyone's time off");
 
+// repeat customers: same phone however it's written, else same name
+const visit = (date, name, phone) => ({ ...jobFor(DRV_A), pickup_date: date, customer_name: name, customer_phone: phone, booking_ref: null });
+const first = await as(DISP, async (tx) => (await tx.query(`select public.save_job(null, $1, $2) as id`, [visit("2026-11-01", "Sam", "021 620 533"), money])).rows[0].id);
+const again = await as(DISP, async (tx) => (await tx.query(`select public.save_job(null, $1, $2) as id`, [visit("2026-12-01", "Samuel", "+64 21 620533"), money])).rows[0].id);
+const keys = (await db.query(`select customer_key from public.jobs where id in ($1, $2)`, [first, again])).rows.map((r) => r.customer_key);
+ok(keys[0] === keys[1] && keys[0] === "p:21620533", "021 620 533 and +64 21 620533 are the same customer");
+ok((await db.query(`select customer_key from public.jobs where id = $1`, [jobB])).rows[0].customer_key === "n:pat", "no phone: the customer is matched by name");
+const counts = await as(DISP, async (tx) => Object.fromEntries((await tx.query(`select job_id, earlier from public.repeat_counts($1)`, [[first, again]])).rows.map((r) => [r.job_id, r.earlier])));
+ok(counts[first] === 0 && counts[again] === 1, "the second booking is flagged as a repeat, the first isn't");
+const driverCounts = await as(DRV_A, async (tx) => (await tx.query(`select job_id, earlier from public.repeat_counts($1)`, [[again, jobB]])).rows);
+ok(driverCounts.length === 1 && driverCounts[0].job_id === again && driverCounts[0].earlier === 1, "a driver learns 'repeat customer' only for their own jobs");
+const retCount = await as(DISP, async (tx) => (await tx.query(`select earlier from public.repeat_counts($1)`, [[ret]])).rows[0].earlier);
+ok(retCount === 1, "the return leg of a trip doesn't count as an extra booking");
+
+// weekly target: office reads, owner sets, drivers never see it
+ok((await as(DRV_A, async (tx) => (await tx.query(`select * from public.targets`)).rows)).length === 0, "a driver can't read the weekly target");
+ok((await as(DISP, async (tx) => (await tx.query(`select * from public.targets`)).rows)).length === 1, "the office can read the weekly target");
+ok((await as(DISP, async (tx) => (await tx.query(`update public.targets set weekly_booking_target = 1 returning 1`)).rows)).length === 0, "the office can't change the target");
+ok((await as(OWNER, async (tx) => (await tx.query(`update public.targets set weekly_booking_target = 5000 returning 1`)).rows)).length === 1, "the owner sets the weekly target");
+
 // deactivated people lose everything
 await as(OWNER, (tx) => tx.query(`update public.profiles set is_active = false where user_id = $1`, [DRV_B]));
 const seenByInactive = await as(DRV_B, async (tx) => (await tx.query(`select id from public.jobs`)).rows);

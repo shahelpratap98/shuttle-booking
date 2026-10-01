@@ -25,6 +25,13 @@ Driver Pay | More Info | Flight Information | Booking Reference).
 - **Built for phones**: bottom menu, the calendar and bookings become simple
   lists on a small screen, filters fold away.
 - **Help** (`/guide`): how to use the app, by role. Drivers see only their part.
+- **Totals** (`/totals`): bookings and total booking $ month by month and week
+  by week for any year, past or future, against an optional **weekly target**
+  (Settings, owner only, never shown to drivers). The booking form shows the
+  month's and week's running total as you type.
+- **Repeat customers**: matched on phone number (021… and +64 21… are the
+  same), else name. Marked ★ in lists, on the booking (with their other
+  bookings), in the form, on the job card and on the driver's job.
 - **Team calendar** (like Teamup): a colour per person. Day timeline per
   driver, Week dispatch board (drivers × days), Month overview. Time off shows
   on it. `$` marks jobs where the driver collects payment.
@@ -64,7 +71,11 @@ security), Tailwind 4. Runs on Vercel's free tier with a free Supabase project.
 1. **Create a Supabase project** (supabase.com, free plan). Pick the Sydney
    region.
 2. **Create the tables.** Supabase → SQL editor → paste all of
-   `supabase/all-migrations.sql` → Run.
+   `supabase/all-migrations.sql` → Run. **Already live?** Run only the
+   migration files in `supabase/migrations/` that are newer than your last
+   one, oldest first (e.g. `20260930000100_totals_repeat.sql` for totals
+   targets and repeat customers). Running the whole file again fails, because
+   the tables already exist.
 3. **Turn off public sign-ups.** Authentication → Sign In / Providers → Email:
    leave Email on, turn *Allow new users to sign up* off. Only people you add
    can get in.
@@ -108,6 +119,12 @@ separate table (`job_money`) that drivers cannot read at all.
   business name in Settings). Expenses, if recorded, come off that for profit.
 - **Driver busy for** blocks the driver's calendar, including the drive back
   (Hamilton run 4 h, Rotorua or Tauranga run 7 h). Clash warnings use it.
+- **Totals and targets** count bookings and their charges by pick-up date, so
+  a December trip booked in October counts in December. The weekly target is
+  compared with each week's total booking $.
+- **Repeat customer** = an earlier booking (not cancelled or an enquiry) with
+  the same phone number, or the same name when there's no phone. A trip
+  there and back counts once.
 - Weeks run Monday to Sunday. Dates and times are the local wall-clock time
   of the business; the time-zone setting only decides what "today" is.
 
@@ -158,7 +175,7 @@ npm run check:import -- "C:/path/Booking.xlsx"
 ## Checks
 
 ```bash
-npm run test:sql   # database security rules (28 checks)
+npm run test:sql   # database security rules (37 checks)
 npx tsc --noEmit   # types
 npm run lint
 npm run build

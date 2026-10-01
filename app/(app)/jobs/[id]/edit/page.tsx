@@ -27,6 +27,8 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
         currency={lists.settings.currency}
         shareName={shareLabel(lists.settings.business_name)}
         today={lists.today}
+        totals={lists.totals}
+        weeklyTarget={lists.weeklyTarget}
       />
     </>
   );

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DriverDoneForm } from "@/app/(app)/jobs/job-controls";
-import { StatusChip } from "@/components/chips";
+import { RepeatChip, StatusChip } from "@/components/chips";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { TripActions } from "@/components/trip-actions";
 import { requireViewer } from "@/lib/auth";
@@ -25,6 +25,7 @@ export default async function MyJobsPage() {
   ]);
   const vehicle = new Map(vehicles.map((v) => [v.id, v]));
   const mine = jobs.filter((j) => j.status !== "cancelled");
+  const repeats = await store.repeatCounts(mine.filter((j) => j.pickup_date >= addDays(today, -7)).map((j) => j.id));
 
   const todays = mine.filter((j) => j.pickup_date === today);
   const upcoming = mine.filter((j) => j.pickup_date > today);
@@ -57,7 +58,7 @@ export default async function MyJobsPage() {
         <section className="mb-6">
           <h2 className="mb-2 text-lg font-bold text-warn">Still to mark as done ({toFinish.length})</h2>
           <div className="flex flex-col gap-3">
-            {toFinish.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} finish />)}
+            {toFinish.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} earlier={repeats[j.id]} finish />)}
           </div>
         </section>
       ) : null}
@@ -68,7 +69,7 @@ export default async function MyJobsPage() {
           <EmptyState title="No jobs today." />
         ) : (
           <div className="flex flex-col gap-3">
-            {todays.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} finish />)}
+            {todays.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} earlier={repeats[j.id]} finish />)}
           </div>
         )}
       </section>
@@ -83,7 +84,7 @@ export default async function MyJobsPage() {
               <div key={d}>
                 <h3 className="mb-2 text-sm font-bold text-muted uppercase">{d === addDays(today, 1) ? "Tomorrow" : fmtDay(d)}</h3>
                 <div className="flex flex-col gap-3">
-                  {list.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} />)}
+                  {list.map((j) => <JobCard key={j.id} job={j} vehicle={j.vehicle_id ? vehicle.get(j.vehicle_id) : undefined} today={today} currency={settings.currency} earlier={repeats[j.id]} />)}
                 </div>
               </div>
             ))}
@@ -115,7 +116,11 @@ export default async function MyJobsPage() {
 
 // One job, laid out for a phone held in one hand: when, where, who, what to
 // collect, then big Call / Text / Directions buttons.
-function JobCard({ job: j, vehicle, today, currency, finish }: { job: Job; vehicle?: Vehicle; today: string; currency: string; finish?: boolean }) {
+function JobCard({
+  job: j, vehicle, today, currency, earlier, finish,
+}: {
+  job: Job; vehicle?: Vehicle; today: string; currency: string; earlier?: number; finish?: boolean;
+}) {
   const toCollect = j.collect_amount > 0 && !j.collected_via;
   const ends = timeFromMinutes(minutesOf(j.pickup_time) + j.duration_min);
   return (
@@ -143,9 +148,10 @@ function JobCard({ job: j, vehicle, today, currency, finish }: { job: Job; vehic
           </li>
         </ol>
         <div className="text-sm">
-          <p className="text-[17px] font-semibold">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-[17px] font-semibold">
             {j.customer_name}
-            {j.customer_phone ? <span className="ml-2 text-sm font-normal text-muted tabular">{j.customer_phone}</span> : null}
+            {j.customer_phone ? <span className="text-sm font-normal text-muted tabular">{j.customer_phone}</span> : null}
+            <RepeatChip earlier={earlier} long />
           </p>
           <p className="text-muted">
             {j.passengers} passenger{j.passengers === 1 ? "" : "s"}

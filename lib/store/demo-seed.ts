@@ -15,6 +15,8 @@ export interface DemoData {
   jobs: Job[];
   timeOff: TimeOff[];
   nextJobNo: number;
+  // Optional, so demo data saved before targets existed still loads.
+  weeklyTarget?: number | null;
 }
 
 function rng(seed: number) {

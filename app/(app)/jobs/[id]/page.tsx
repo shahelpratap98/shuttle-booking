@@ -5,14 +5,15 @@ import type { ReactNode } from "react";
 import { deleteJob } from "@/app/(app)/jobs/actions";
 import { JobCard } from "@/app/(app)/jobs/job-card";
 import { AssignForm, DriverDoneForm, StatusButtons } from "@/app/(app)/jobs/job-controls";
-import { PaymentChip, PersonDot, StatusChip, Unassigned } from "@/components/chips";
+import { PaymentChip, PersonDot, RepeatChip, StatusChip, Unassigned } from "@/components/chips";
 import { ActionSubmit } from "@/components/pending-buttons";
 import { TripActions } from "@/components/trip-actions";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
 import { isOffice, requireViewer } from "@/lib/auth";
 import { jobWarnings } from "@/lib/clashes";
-import { METHOD_LABEL, SERVICE_LABEL, SOURCE_LABEL } from "@/lib/constants";
-import { fmtDate, fmtDay, fmtDuration, fmtLong, fmtTime, minutesOf, timeFromMinutes, todayIn } from "@/lib/dates";
+import { BILLABLE, METHOD_LABEL, SERVICE_LABEL, SOURCE_LABEL, STATUS_LABEL } from "@/lib/constants";
+import { customerKey } from "@/lib/customers";
+import { endOfMonth, fmtDate, fmtDay, fmtDuration, fmtLong, fmtMonth, fmtTime, minutesOf, startOfMonth, timeFromMinutes, todayIn } from "@/lib/dates";
 import { bookingRef, businessPay, charge, expenses, jobRef, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
 import { jobCardText } from "@/lib/job-card";
 
@@ -34,14 +35,24 @@ export default async function JobPage({
   if (!job) notFound();
 
   const office = isOffice(viewer.role);
-  const [settings, people, vehicles, sameDay, timeOff, linked] = await Promise.all([
+  const saved = typeof q.saved === "string" ? SAVED[q.saved] : undefined;
+  const [settings, people, vehicles, sameDay, timeOff, linked, repeats, monthJobs] = await Promise.all([
     store.settings(),
     store.people(),
     store.vehicles(),
     store.jobs({ from: job.pickup_date, to: job.pickup_date }),
     store.timeOff(job.pickup_date, job.pickup_date),
     job.linked_job_id ? store.job(job.linked_job_id) : Promise.resolve(null),
+    store.repeatCounts([job.id]),
+    // After a save: the month's new total, for the banner.
+    saved && office ? store.jobs({ from: startOfMonth(job.pickup_date), to: endOfMonth(job.pickup_date), statuses: BILLABLE }) : Promise.resolve([]),
   ]);
+  const earlier = repeats[job.id] ?? 0;
+  // The office sees the customer's other bookings.
+  const history =
+    office && earlier
+      ? (await store.jobs({ customerKey: customerKey(job.customer_name, job.customer_phone), order: "desc", limit: 50 })).filter((o) => o.id !== job.id)
+      : [];
   const cur = settings.currency;
   const share = shareLabel(settings.business_name);
   const driver = people.find((p) => p.user_id === job.driver_id);
@@ -49,7 +60,6 @@ export default async function JobPage({
   const warnings = office ? jobWarnings(job, sameDay, timeOff, people, vehicles) : [];
   const sharedWith = job.is_shared ? sameDay.filter((o) => o.id !== job.id && o.is_shared && o.driver_id === job.driver_id && o.status !== "cancelled") : [];
   const ends = timeFromMinutes(minutesOf(job.pickup_time) + job.duration_min);
-  const saved = typeof q.saved === "string" ? SAVED[q.saved] : undefined;
   const error = typeof q.error === "string" ? q.error : undefined;
   const m = job.money;
   const mine = job.driver_id === viewer.user_id;
@@ -82,7 +92,17 @@ export default async function JobPage({
         ) : null}
       </div>
 
-      {saved ? <p role="status" className="rounded-lg bg-ok-bg px-3 py-2 text-sm font-semibold text-ok">{saved}</p> : null}
+      {saved ? (
+        <p role="status" className="rounded-lg bg-ok-bg px-3 py-2 text-sm font-semibold text-ok">
+          {saved}
+          {monthJobs.length ? (
+            <span className="font-normal">
+              {" "}{fmtMonth(job.pickup_date)} is now {monthJobs.length} booking{monthJobs.length === 1 ? "" : "s"},{" "}
+              {money(monthJobs.reduce((sum, o) => sum + charge(o), 0), cur, { cents: false })} booked. <Link href={`/totals?year=${job.pickup_date.slice(0, 4)}`} className="underline">Totals</Link>
+            </span>
+          ) : null}
+        </p>
+      ) : null}
       {error ? <p role="alert" className="rounded-lg bg-bad-bg px-3 py-2 text-sm font-semibold text-bad">{error}</p> : null}
       {warnings.length ? (
         <div role="alert" className="rounded-lg border border-warn/40 bg-warn-bg px-4 py-3 text-sm text-warn">
@@ -143,19 +163,39 @@ export default async function JobPage({
           </Card>
 
           <Card title="Customer">
-            <p className="text-[17px] font-semibold">{job.customer_name}</p>
+            <p className="flex flex-wrap items-center gap-2 text-[17px] font-semibold">
+              {job.customer_name}
+              <RepeatChip earlier={earlier} long />
+            </p>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
               {job.customer_phone ? <a href={`tel:${job.customer_phone.replace(/\s/g, "")}`} className="link">{job.customer_phone}</a> : null}
               {job.customer_email ? <a href={`mailto:${job.customer_email}`} className="link">{job.customer_email}</a> : null}
               {!job.customer_phone && !job.customer_email ? <span className="text-muted">No contact details</span> : null}
             </div>
             {office ? <p className="mt-2 text-sm text-muted">Booked through {SOURCE_LABEL[job.booking_source].toLowerCase()} on {fmtLong(job.created_at.slice(0, 10))}.</p> : null}
+            {history.length ? (
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-muted uppercase">Their other bookings</p>
+                <ul className="mt-1 divide-y divide-line text-sm">
+                  {history.slice(0, 5).map((o) => (
+                    <li key={o.id} className="flex items-baseline gap-3 py-1.5">
+                      <Link href={`/jobs/${o.id}`} className="w-24 shrink-0 font-semibold hover:underline">{fmtDay(o.pickup_date)}</Link>
+                      <span className="min-w-0 flex-1 truncate text-muted">{o.pickup_address} → {o.dropoff_address}</span>
+                      <span className="shrink-0 tabular">{o.status === "confirmed" || o.status === "completed" ? money(charge(o), cur, { cents: false }) : STATUS_LABEL[o.status]}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href={`/jobs?view=all&customer=${encodeURIComponent(customerKey(job.customer_name, job.customer_phone))}`} className="link mt-1 inline-block text-sm">
+                  All {history.length + 1} bookings
+                </Link>
+              </div>
+            ) : null}
           </Card>
 
           {office ? (
             <Card title="Job card for the driver">
               <JobCard
-                text={jobCardText(job, { businessName: settings.business_name, currency: cur, driver, vehicle })}
+                text={jobCardText(job, { businessName: settings.business_name, currency: cur, driver, vehicle, earlierBookings: earlier })}
                 whatsappTo={whatsappNumber(driver?.phone)}
                 driverName={driver?.display_name ?? null}
               />

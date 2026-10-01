@@ -4,6 +4,9 @@ export interface Customer {
   name: string;
   phone: string | null;
   email: string | null;
+  key: string; // lib/customers.ts customerKey()
+  bookings: number; // trips booked so far (not cancelled or enquiries)
+  last: string | null; // latest pick-up date
 }
 
 export interface PersonPatch {
@@ -36,6 +39,13 @@ export interface Store {
   deleteJob(id: string): Promise<Result>;
   driverUpdateJob(id: string, status: JobStatus, driverNotes: string | null, distanceKm: number | null, collectedVia: PaymentMethod | null): Promise<Result>;
   recentCustomers(): Promise<Customer[]>;
+  // For each job id the viewer may see: how many bookings that customer made
+  // before it (0 = first time). Missing ids mean "not known".
+  repeatCounts(ids: string[]): Promise<Record<string, number>>;
+
+  // The usual weekly target for total booking $ (office only; null = none).
+  weeklyTarget(): Promise<number | null>;
+  saveWeeklyTarget(amount: number | null): Promise<Result>;
 
   people(): Promise<Profile[]>;
   savePerson(userId: string, patch: PersonPatch): Promise<Result>;

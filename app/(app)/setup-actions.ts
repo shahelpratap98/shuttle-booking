@@ -20,6 +20,18 @@ function numberOrNull(fd: FormData, name: string, label: string, min: number, ma
   return n;
 }
 
+// ------------------------------------------------------------------ target
+
+export async function saveTarget(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { store } = await requireOwner();
+  const amount = numberOrNull(fd, "weekly_target", "The weekly target", 0, 10_000_000);
+  if (typeof amount === "string") return { ok: false, message: amount };
+  const res = await store.saveWeeklyTarget(amount === 0 ? null : amount);
+  if (!res.ok) return { ok: false, message: res.error };
+  revalidatePath("/", "layout");
+  return { ok: true, message: amount ? "Target saved." : "Target cleared." };
+}
+
 // ------------------------------------------------------------------ team
 
 export async function invitePerson(_prev: ActionState, fd: FormData): Promise<ActionState> {

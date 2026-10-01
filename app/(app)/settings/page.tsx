@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { clearSampleData, saveSettings } from "@/app/(app)/setup-actions";
+import { clearSampleData, saveSettings, saveTarget } from "@/app/(app)/setup-actions";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader } from "@/components/page-header";
 import { requireOwner } from "@/lib/auth";
@@ -11,7 +11,7 @@ const ZONES = ["Pacific/Auckland", "Pacific/Chatham", "Australia/Sydney", "Austr
 
 export default async function SettingsPage() {
   const { store } = await requireOwner();
-  const s = await store.settings();
+  const [s, target] = await Promise.all([store.settings(), store.weeklyTarget()]);
   const zones = ZONES.includes(s.timezone) ? ZONES : [s.timezone, ...ZONES];
 
   return (
@@ -37,6 +37,20 @@ export default async function SettingsPage() {
               </select>
               <p className="field-hint">Decides what &ldquo;today&rdquo; is.</p>
             </div>
+          </div>
+        </ActionForm>
+      </section>
+
+      <section id="target" className="card mt-4 max-w-xl scroll-mt-4 p-4">
+        <h2 className="font-bold">Weekly target</h2>
+        <p className="mt-1 mb-3 text-sm text-muted">
+          Total booking $ you aim for each Monday-to-Sunday week. Totals and the dashboard show every week against it. Drivers never see it.
+        </p>
+        <ActionForm action={saveTarget} submitLabel="Save target" className="flex flex-col gap-3">
+          <div className="max-w-56">
+            <label htmlFor="weekly_target" className="field-label">Target per week ({s.currency})</label>
+            <input id="weekly_target" name="weekly_target" inputMode="decimal" defaultValue={target ?? ""} placeholder="e.g. 5000" className="field" />
+            <p className="field-hint">Leave empty for no target.</p>
           </div>
         </ActionForm>
       </section>

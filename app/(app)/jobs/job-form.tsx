@@ -6,10 +6,13 @@ import { saveJob } from "@/app/(app)/jobs/actions";
 import { Spinner } from "@/components/spinner";
 import { useFormAction } from "@/components/use-form-action";
 import {
-  METHOD_LABEL, METHODS, NO_DRIVER, PAYMENT_LABEL, PAYMENTS, ROLE_LABEL, SERVICE_LABEL, SERVICES, SOURCE_LABEL, SOURCES, STATUS_LABEL, STATUSES,
+  BILLABLE, METHOD_LABEL, METHODS, NO_DRIVER, PAYMENT_LABEL, PAYMENTS, ROLE_LABEL, SERVICE_LABEL, SERVICES, SOURCE_LABEL, SOURCES, STATUS_LABEL, STATUSES,
 } from "@/lib/constants";
+import { customerKey } from "@/lib/customers";
+import { fmtDate, fmtMonth, fmtShort, startOfWeek } from "@/lib/dates";
 import type { Customer } from "@/lib/store/types";
-import type { Job, PaymentStatus, Profile, Vehicle } from "@/lib/types";
+import type { Job, JobStatus, PaymentStatus, Profile, Vehicle } from "@/lib/types";
+import type { BookedSoFar } from "./form-data";
 
 type Defaults = Partial<Job> & { money?: Job["money"] };
 
@@ -33,6 +36,8 @@ export function JobForm({
   currency,
   shareName,
   today,
+  totals,
+  weeklyTarget,
 }: {
   job?: Job; // editing
   defaults: Defaults;
@@ -43,6 +48,8 @@ export function JobForm({
   currency: string;
   shareName: string; // "Trekway pay"
   today: string;
+  totals: BookedSoFar; // what's booked so far per month and week
+  weeklyTarget: number | null;
 }) {
   const { state, pending, onSubmit, formRef } = useFormAction(saveJob);
   const d = defaults;
@@ -57,6 +64,9 @@ export function JobForm({
   const [tolls, setTolls] = useState(m?.tolls_parking ? String(m.tolls_parking) : "");
   const [other, setOther] = useState(m?.other_cost ? String(m.other_cost) : "");
   const [payment, setPayment] = useState<PaymentStatus>(m?.payment_status ?? "pay_on_day");
+  const [pickupDate, setPickupDate] = useState(d.pickup_date ?? "");
+  const [status, setStatus] = useState<JobStatus>(d.status ?? "confirmed");
+  const [name, setName] = useState(d.customer_name ?? "");
   const [phone, setPhone] = useState(d.customer_phone ?? "");
   const [email, setEmail] = useState(d.customer_email ?? "");
 
@@ -70,12 +80,32 @@ export function JobForm({
   const kept = charged - toDriver;
 
   // Picking a known customer fills in their phone and email if those are empty.
-  const onCustomer = (name: string) => {
-    const c = customers.find((x) => x.name.toLowerCase() === name.trim().toLowerCase());
+  const onCustomer = (value: string) => {
+    setName(value);
+    const c = customers.find((x) => x.name.toLowerCase() === value.trim().toLowerCase());
     if (!c) return;
     if (!phone && c.phone) setPhone(c.phone);
     if (!email && c.email) setEmail(c.email);
   };
+
+  // Have they booked before? Same phone, else same name (lib/customers.ts).
+  const known = name.trim() ? customers.find((c) => c.key === customerKey(name, phone)) : undefined;
+  const sameAsSaved = job && known?.key === customerKey(job.customer_name, job.customer_phone);
+  const earlier = known ? known.bookings - (sameAsSaved && BILLABLE.includes(job.status) ? 1 : 0) : 0;
+
+  // The month and week this booking falls in, as booked so far, and with it.
+  const counts = BILLABLE.includes(status);
+  const bucket = (key: string, savedIn: boolean) => {
+    const t = totals[key] ?? { bookings: 0, total: 0 };
+    // When editing, take this booking's saved amount out first.
+    const mine = job && savedIn && BILLABLE.includes(job.status) ? { bookings: 1, total: job.money?.price ?? 0 } : { bookings: 0, total: 0 };
+    const before = { bookings: t.bookings - mine.bookings, total: t.total - mine.total };
+    return { before, after: counts ? { bookings: before.bookings + 1, total: before.total + charged } : before };
+  };
+  const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(pickupDate);
+  const month = hasDate ? bucket(`m:${pickupDate.slice(0, 7)}`, job?.pickup_date.slice(0, 7) === pickupDate.slice(0, 7)) : null;
+  const week = hasDate ? bucket(`w:${startOfWeek(pickupDate)}`, Boolean(job) && startOfWeek(job!.pickup_date) === startOfWeek(pickupDate)) : null;
+  const whole = (n: number) => new Intl.NumberFormat("en-NZ", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
 
   const active = people.filter((p) => p.is_active || p.user_id === d.driver_id);
   const drivers = active.filter((p) => p.role === "driver");
@@ -93,7 +123,7 @@ export function JobForm({
         <Section title="Trip">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label="Date" htmlFor="pickup_date">
-              <input id="pickup_date" name="pickup_date" type="date" required defaultValue={d.pickup_date} className="field" />
+              <input id="pickup_date" name="pickup_date" type="date" required value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} className="field" />
             </Field>
             <Field label="Pickup time" htmlFor="pickup_time">
               <input id="pickup_time" name="pickup_time" type="time" required step={300} defaultValue={d.pickup_time} className="field" />
@@ -139,9 +169,15 @@ export function JobForm({
 
         <Section title="Customer">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Name" htmlFor="customer_name" hint={customers.length ? "Start typing to pick a past customer" : undefined}>
-              <input id="customer_name" name="customer_name" required maxLength={120} list="customers" defaultValue={d.customer_name} onChange={(e) => onCustomer(e.target.value)} className="field" autoComplete="off" />
-              <datalist id="customers">{customers.map((c) => <option key={c.name} value={c.name} />)}</datalist>
+            <Field label="Name" htmlFor="customer_name" hint={customers.length && !earlier ? "Start typing to pick a past customer" : undefined}>
+              <input id="customer_name" name="customer_name" required maxLength={120} list="customers" value={name} onChange={(e) => onCustomer(e.target.value)} className="field" autoComplete="off" />
+              <datalist id="customers">{[...new Set(customers.map((c) => c.name))].map((n) => <option key={n} value={n} />)}</datalist>
+              {known && earlier > 0 ? (
+                <p className="mt-1.5 rounded-lg bg-accent/15 px-2.5 py-1.5 text-sm font-semibold text-accent-text" aria-live="polite">
+                  ★ Repeat customer: {earlier} earlier booking{earlier === 1 ? "" : "s"}
+                  {known.last ? <span className="font-normal">, latest {fmtDate(known.last)}</span> : null}
+                </p>
+              ) : null}
             </Field>
             <Field label="Phone #" htmlFor="customer_phone">
               <input id="customer_phone" name="customer_phone" type="tel" maxLength={60} value={phone} onChange={(e) => setPhone(e.target.value)} className="field" />
@@ -167,7 +203,7 @@ export function JobForm({
       <div className="flex min-w-0 flex-col gap-4">
         <Section title="Driver and vehicle">
           <Field label="Status" htmlFor="status">
-            <select id="status" name="status" defaultValue={d.status ?? "confirmed"} className="field">
+            <select id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as JobStatus)} className="field">
               {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
             </select>
           </Field>
@@ -215,6 +251,24 @@ export function JobForm({
               {charged > 0 ? <span className="ml-1.5 text-xs font-normal text-muted">{Math.round((kept / charged) * 100)}% of charge</span> : null}
             </dd>
           </dl>
+
+          {month && week ? (
+            <div className="rounded-lg border border-line px-3 py-2.5 text-sm tabular" aria-live="polite">
+              <p>
+                <b>{fmtMonth(pickupDate)}</b>: {month.before.bookings} booking{month.before.bookings === 1 ? "" : "s"}, {whole(month.before.total)} booked
+                {counts ? <> &rarr; <b>{whole(month.after.total)}</b> with this one</> : null}
+              </p>
+              <p className="mt-1 text-muted">
+                Week of {fmtShort(startOfWeek(pickupDate))}: {whole(week.after.total)}
+                {weeklyTarget ? (
+                  <> of {whole(weeklyTarget)} target ({Math.round((week.after.total / weeklyTarget) * 100)}%)</>
+                ) : (
+                  <>, {week.after.bookings} booking{week.after.bookings === 1 ? "" : "s"}</>
+                )}
+                {!counts ? " (enquiries and cancelled bookings don't count)" : ""}
+              </p>
+            </div>
+          ) : null}
 
           <Field label="Payment" htmlFor="payment_status">
             <select id="payment_status" name="payment_status" value={payment} onChange={(e) => setPayment(e.target.value as PaymentStatus)} className="field">

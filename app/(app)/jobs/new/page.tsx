@@ -62,6 +62,8 @@ export default async function NewJobPage({ searchParams }: { searchParams: Promi
         currency={lists.settings.currency}
         shareName={shareLabel(lists.settings.business_name)}
         today={lists.today}
+        totals={lists.totals}
+        weeklyTarget={lists.weeklyTarget}
       />
     </>
   );

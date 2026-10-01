@@ -94,7 +94,25 @@ export default async function GuidePage() {
 
               <h3>Keep track</h3>
               <ul className="list-disc pl-5">
-                <li><b>Bookings</b> tabs: Upcoming, Today, Pay on the day (money drivers will collect), Waiting for payment, Past, All. Search and filters are under the tabs.</li>
+                <li>
+                  <b>Bookings</b> tabs: <b>By day</b> (every job on one day, with ‹ › to move a day and the day&rsquo;s total), Upcoming and All (grouped by
+                  day, with each day&rsquo;s number of bookings and $), Pay on the day (money drivers will collect), Waiting for payment, Past. Search and
+                  filters are under the tabs.
+                </li>
+                <li>
+                  <b>Totals</b>: what&rsquo;s been booked month by month and week by week for any year, past or future (future months show what&rsquo;s
+                  booked so far), with the year&rsquo;s total. Tap a month or week to see its bookings. If the owner has set a weekly target, each week
+                  shows how close it got.
+                </li>
+                <li>
+                  While you enter a booking, the form shows that month&rsquo;s total so far and what it will be with this booking, plus the week against the
+                  target. After saving, the green message gives the month&rsquo;s new total.
+                </li>
+                <li>
+                  <b>★ Repeat customer</b>: someone who has booked before (same phone number, or the same name if there&rsquo;s no phone) is marked in the
+                  lists, on the booking, and on the driver&rsquo;s job. The booking page lists their other bookings, and the form tells you as you type their
+                  name or number.
+                </li>
                 <li><b>Calendar</b>: everyone&rsquo;s jobs in their own colour. Day shows who is free when, Week is the dispatch board, Month is the big picture. Tap a name to hide or show that person. On a phone it shows as a list, day by day.</li>
                 <li><b>Status</b> on a booking: Confirm an enquiry, Mark done, Mark no-show or Cancel. Cancel rather than delete, so it still counts in the numbers.</li>
                 <li><b>Time off</b>: add anyone&rsquo;s days off. They show on the calendar and in the Assign list.</li>
@@ -121,6 +139,7 @@ export default async function GuidePage() {
                 <li>To change someone&rsquo;s role, colour or mobile, edit their card and <b>Save</b>. Untick <b>Active</b> when someone leaves: they can&rsquo;t sign in, but their past jobs stay.</li>
                 <li>Someone locked out? Open their card, <b>Make a new sign-in link</b>, and send it to them.</li>
                 <li><b>Settings</b>: business name, currency and time zone (the time zone decides what &ldquo;today&rdquo; is).</li>
+                <li><b>Settings → Weekly target</b>: the total booking $ you aim for each week. Totals and the dashboard show every week against it. Drivers never see it.</li>
               </ul>
             </Part>
           </>
@@ -134,6 +153,9 @@ export default async function GuidePage() {
             <li>
               A blue <b>Collect $…</b> means the customer pays you on the day. <b>Nothing to collect</b> means it&rsquo;s already paid. <b>Your pay</b>{" "}
               is what you get for the job.
+            </li>
+            <li>
+              <b>★ Repeat customer</b> on a job means they&rsquo;ve travelled with us before.
             </li>
             <li>
               Use the buttons on the job: <b>Call</b> or <b>Text</b> the customer, <b>To pick-up</b> for directions from where you are, <b>Full route</b>{" "}

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Job, JobMoney, Profile, Result, Settings, TimeOff, Vehicle } from "@/lib/types";
+import { customersFrom } from "@/lib/customers";
 import type { Customer, Store } from "./types";
 
 const PROFILE_COLS = "user_id, display_name, email, phone, role, colour, pay_rate, is_active";
@@ -96,6 +97,7 @@ class SupabaseStore implements Store {
     if (q.driverId) query = query.eq("driver_id", q.driverId);
     if (q.unassigned) query = query.is("driver_id", null);
     if (q.statuses?.length) query = query.in("status", q.statuses);
+    if (q.customerKey) query = query.eq("customer_key", q.customerKey);
     if (q.search) {
       const s = cleanSearch(q.search);
       const num = /^j-?(\d+)$/i.exec(s)?.[1];
@@ -112,7 +114,10 @@ class SupabaseStore implements Store {
     const asc = (q.order ?? "asc") === "asc";
     query = query.order("pickup_date", { ascending: asc }).order("pickup_time", { ascending: asc }).limit(q.limit ?? 5000);
     const { data, error } = await query;
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (q.customerKey) return []; // customer_key arrives with the 20260930000100 migration
+      throw new Error(error.message);
+    }
     return (data as unknown as Row[]).map(toJob);
   }
 
@@ -164,15 +169,31 @@ class SupabaseStore implements Store {
   async recentCustomers(): Promise<Customer[]> {
     const { data } = await this.db
       .from("jobs")
-      .select("customer_name, customer_phone, customer_email")
+      .select("id, customer_name, customer_phone, customer_email, status, pickup_date, linked_job_id")
       .order("created_at", { ascending: false })
-      .limit(1500);
-    const seen = new Map<string, Customer>();
-    for (const r of data ?? []) {
-      const key = String(r.customer_name).trim().toLowerCase();
-      if (!seen.has(key)) seen.set(key, { name: r.customer_name, phone: r.customer_phone, email: r.customer_email });
-    }
-    return [...seen.values()];
+      .limit(3000);
+    return customersFrom((data ?? []) as Parameters<typeof customersFrom>[0]);
+  }
+
+  // Needs the 20260930000100 migration; until it has been run, nobody is
+  // flagged rather than the page failing.
+  async repeatCounts(ids: string[]): Promise<Record<string, number>> {
+    if (!ids.length) return {};
+    const { data, error } = await this.db.rpc("repeat_counts", { p_job_ids: ids });
+    if (error) return {};
+    return Object.fromEntries((data as { job_id: string; earlier: number }[]).map((r) => [r.job_id, Number(r.earlier)]));
+  }
+
+  async weeklyTarget(): Promise<number | null> {
+    if (!(await this.isOffice())) return null;
+    const { data, error } = await this.db.from("targets").select("weekly_booking_target").eq("id", 1).maybeSingle();
+    return error || !data ? null : n(data.weekly_booking_target);
+  }
+
+  async saveWeeklyTarget(amount: number | null): Promise<Result> {
+    const { data, error } = await this.db.from("targets").update({ weekly_booking_target: amount }).eq("id", 1).select("id");
+    if (error) return fail(/targets/.test(error.message) ? "Targets need the latest database update (see README: 20260930000100_totals_repeat.sql)." : friendly(error.message));
+    return data?.length ? done : fail("You don't have permission to do that.");
   }
 
   async people() {

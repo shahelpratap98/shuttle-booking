@@ -94,6 +94,7 @@ export interface JobQuery {
   unassigned?: boolean;
   statuses?: JobStatus[];
   search?: string;
+  customerKey?: string; // the same customer: lib/customers.ts customerKey()
   order?: "asc" | "desc";
   limit?: number;
 }

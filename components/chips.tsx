@@ -1,4 +1,5 @@
 import { NO_DRIVER, PAYMENT_LABEL, STATUS_LABEL } from "@/lib/constants";
+import { repeatLabel } from "@/lib/customers";
 import type { JobStatus, PaymentStatus } from "@/lib/types";
 
 const STATUS_TONE: Record<JobStatus, string> = {
@@ -27,6 +28,17 @@ export function PaymentChip({ status }: { status: PaymentStatus }) {
 // A person's calendar colour beside their name, so identity never rests on colour alone.
 export function PersonDot({ colour, className = "size-2.5" }: { colour: string; className?: string }) {
   return <span aria-hidden="true" className={`inline-block shrink-0 rounded-full ${className}`} style={{ background: colour }} />;
+}
+
+// A customer who has booked before. `earlier` = how many earlier bookings;
+// nothing shows for a first-timer.
+export function RepeatChip({ earlier, long = false }: { earlier: number | undefined; long?: boolean }) {
+  if (!earlier) return null;
+  return (
+    <span className="chip bg-accent/15 text-accent-text" title={repeatLabel(earlier)}>
+      ★ {long ? repeatLabel(earlier) : "Repeat"}
+    </span>
+  );
 }
 
 export function Unassigned() {

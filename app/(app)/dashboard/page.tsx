@@ -5,6 +5,7 @@ import { BarList, Heatmap, Legend, LineChart, StackedColumns } from "@/component
 import { PaymentChip, PersonDot, StatusChip } from "@/components/chips";
 import { PageHeader } from "@/components/page-header";
 import { StatTile } from "@/components/stat-tile";
+import { TargetBar } from "@/components/target-bar";
 import { requireOffice } from "@/lib/auth";
 import { BILLABLE, NO_DRIVER, SERVICE_LABEL, SOURCE_LABEL, UNASSIGNED_COLOUR } from "@/lib/constants";
 import { addDays, addMonths, endOfMonth, fmtDay, fmtShort, fmtTime, startOfMonth, startOfWeek, todayIn, WEEKDAYS } from "@/lib/dates";
@@ -33,7 +34,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const monthEnd = endOfMonth(addMonths(today, MONTHS_AHEAD));
   const fetchFrom = [period.prevFrom, trendStart, monthStart].sort()[0];
   const fetchTo = [period.to, monthEnd].sort()[1];
-  const [jobs, people, vehicles] = await Promise.all([store.jobs({ from: fetchFrom, to: fetchTo }), store.people(), store.vehicles()]);
+  const [jobs, people, vehicles, target] = await Promise.all([
+    store.jobs({ from: fetchFrom, to: fetchTo }),
+    store.people(),
+    store.vehicles(),
+    store.weeklyTarget(),
+  ]);
 
   const inRange = (from: string, to: string) => jobs.filter((j) => j.pickup_date >= from && j.pickup_date <= to);
   const periodJobs = inRange(period.from, period.to);
@@ -223,7 +229,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           />
         </Card>
         <div className="min-w-0 lg:col-span-2">
-          <Card title="Week by week" sub="Number of bookings and total booking $ each week, newest first">
+          <Card
+        title="Week by week"
+        sub={`Number of bookings and total booking $ each week, newest first${target ? `. Weekly target ${m(target)}` : ""}`}
+        action={<Link href="/totals" className="link text-sm">Every week and month</Link>}
+      >
             <div className="-mx-4 overflow-x-auto px-4">
               <table className="w-full min-w-[560px] text-sm tabular">
                 <thead>
@@ -231,6 +241,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <th className="th px-2">Week starting</th>
                     <th className="th px-2 text-right">Bookings</th>
                     <th className="th px-2 text-right">Total booking $</th>
+                    {target ? <th className="th px-2 text-right">vs target</th> : null}
                     <th className="th px-2 text-right">Driver pay</th>
                     <th className="th px-2 text-right">{share}</th>
                     <th className="th px-2 text-right">Cancelled / no-show</th>
@@ -244,6 +255,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                       </td>
                       <td className="px-2 py-1.5 text-right">{num(w.bookings)}</td>
                       <td className="px-2 py-1.5 text-right">{m(w.charges)}</td>
+                      {target ? <td className="px-2 py-1.5 text-right"><TargetBar value={w.charges} target={target} /></td> : null}
                       <td className="px-2 py-1.5 text-right">{m(w.driverPay)}</td>
                       <td className="px-2 py-1.5 text-right">{m(w.businessPay)}</td>
                       <td className="px-2 py-1.5 text-right text-muted">{num(w.lost)}</td>
