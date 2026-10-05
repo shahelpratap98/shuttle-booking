@@ -19,6 +19,9 @@ export const num = (n: number, digits = 0) =>
 
 export const pct = (n: number) => `${Math.round(n * 100)}%`;
 
+// The GST inside a GST-inclusive amount (NZ: 15%, so 3/23 of the total).
+export const gstOf = (inclusive: number) => Math.round(((inclusive * 3) / 23) * 100) / 100;
+
 export const jobRef = (jobNo: number) => `J-${jobNo}`;
 
 // The reference people know a booking by: theirs if it has one, else ours.

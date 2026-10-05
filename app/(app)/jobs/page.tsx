@@ -22,6 +22,7 @@ const VIEWS = {
   all: "All",
   collect: "Pay on the day",
   unpaid: "Waiting for payment",
+  flagged: "Flagged",
   past: "Past",
 } as const;
 type View = keyof typeof VIEWS;
@@ -38,7 +39,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   const asked = s("view") === "today" ? "day" : s("view"); // old "Today" links
   const customer = /^[pn]:.{1,120}$/.test(s("customer")) ? s("customer") : ""; // one customer's bookings (lib/customers.ts key)
-  const view: View = asked in VIEWS ? (asked as View) : s("from") || s("to") || s("driver") || s("q") || customer ? "all" : "available";
+  const series = /^[0-9a-f-]{36}$/i.test(s("series")) ? s("series") : ""; // one repeating run
+  const view: View = asked in VIEWS ? (asked as View) : s("from") || s("to") || s("driver") || s("q") || customer || series ? "all" : "available";
   const day = isIsoDate(s("date")) ? s("date") : today;
   const from = view !== "day" && isIsoDate(s("from")) ? s("from") : "";
   const to = view !== "day" && isIsoDate(s("to")) ? s("to") : "";
@@ -67,6 +69,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     case "unpaid":
       Object.assign(query, { to: today, statuses: ["completed", "no_show"], order: "desc" });
       break;
+    case "flagged":
+      Object.assign(query, { flagged: true });
+      break;
     default:
       Object.assign(query, { order: "desc", limit: from || to || driver || search ? 2000 : 300 });
   }
@@ -76,6 +81,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   else if (driver) query.driverId = driver;
   if (status) query.statuses = [status];
   if (customer) query.customerKey = customer;
+  if (series) Object.assign(query, { seriesId: series, order: "asc" });
 
   const [found, people, vehicles] = await Promise.all([store.jobs(query), store.people(), store.vehicles()]);
   let jobs = service ? found.filter((j) => j.service_type === service) : found;
@@ -117,7 +123,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   const keep = (extra: Record<string, string>) => {
     const p = new URLSearchParams();
-    for (const [k, v] of Object.entries({ q: search, driver, status, service, from, to, customer, ...extra })) if (v) p.set(k, v);
+    for (const [k, v] of Object.entries({ q: search, driver, status, service, from, to, customer, series, ...extra })) if (v) p.set(k, v);
     return `/jobs?${p}`;
   };
   const dayHref = (d: string) => keep({ view: "day", date: d, from: "", to: "" });
@@ -132,6 +138,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         intro={
           view === "available" ? "Upcoming bookings with the driver still TBC. Pick a driver and vehicle, then Assign."
           : view === "collect" ? "Upcoming bookings where the driver collects the money on the day."
+          : view === "flagged" ? "Bookings someone flagged for attention. Open one to see why, or clear the flag."
           : undefined
         }
         actions={
@@ -142,6 +149,12 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           </>
         }
       />
+      {series ? (
+        <p className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-info-bg px-3 py-2 text-sm text-info">
+          <b>One repeating run</b> ({jobs.length} trip{jobs.length === 1 ? "" : "s"})
+          <Link href={`/jobs?view=${view}`} className="ml-auto font-semibold underline">Show everything</Link>
+        </p>
+      ) : null}
       {customer ? (
         <p className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent/15 px-3 py-2 text-sm text-accent-text">
           <b>★ One customer&rsquo;s bookings</b>
@@ -315,7 +328,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                           <span className="truncate font-semibold">{j.customer_name} · {j.passengers} pax</span>
                           <span className="truncate text-sm text-muted">{j.pickup_address} → {j.dropoff_address}</span>
                           <span className="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                            {d ? <span className="inline-flex items-center gap-1.5 font-semibold"><PersonDot colour={d.colour} />{d.display_name}</span> : <Unassigned />}
+                            {d ? <span className="inline-flex items-center gap-1.5 font-semibold"><PersonDot colour={d.colour} />{d.display_name}</span> : j.operator ? <span className="chip bg-idle-bg text-idle">{j.operator}</span> : <Unassigned />}
                             {j.status !== "confirmed" ? <StatusChip status={j.status} /> : null}
                             {j.collected_via ? (
                               <span className="chip bg-ok-bg text-ok">Collected {j.collected_via}</span>
@@ -323,6 +336,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                               <PaymentChip status={j.money.payment_status} />
                             ) : null}
                             <RepeatChip earlier={repeats[j.id]} />
+                            {j.flag_note ? <span className="chip bg-bad-bg text-bad" title={j.flag_note}>⚑ {j.flag_note.slice(0, 30)}</span> : null}
                             {j.is_shared ? <span className="chip bg-info-bg text-info">Shared</span> : null}
                           </span>
                         </Link>
@@ -376,9 +390,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                           <td className="td max-w-48">
                             <span className="block truncate">{j.customer_name}</span>
                             <RepeatChip earlier={repeats[j.id]} />
+                            {j.flag_note ? <span className="chip bg-bad-bg text-bad" title={j.flag_note}>⚑ Flagged</span> : null}
                           </td>
                           <td className="td whitespace-nowrap">
-                            {d ? <span className="inline-flex items-center gap-2"><PersonDot colour={d.colour} />{d.display_name}</span> : <Unassigned />}
+                            {d ? <span className="inline-flex items-center gap-2"><PersonDot colour={d.colour} />{d.display_name}</span> : j.operator ? <span className="chip bg-idle-bg text-idle">{j.operator}</span> : <Unassigned />}
                           </td>
                           <td className="td"><StatusChip status={j.status} /></td>
                           <td className="td text-right tabular">{j.money ? money(charge(j), cur) : "–"}</td>

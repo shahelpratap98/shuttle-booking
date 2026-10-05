@@ -1,5 +1,6 @@
-import { minutesOf, fmtTime, timeFromMinutes } from "@/lib/dates";
-import { jobRef } from "@/lib/format";
+import { customerKey } from "@/lib/customers";
+import { fmtDate, minutesOf, fmtTime, timeFromMinutes } from "@/lib/dates";
+import { bookingRef, jobRef } from "@/lib/format";
 import type { Job, Profile, TimeOff, Vehicle } from "@/lib/types";
 
 // A driver needs a little time between jobs to get to the next pickup.
@@ -34,6 +35,7 @@ export function driverConflict(job: Slot, driverId: string, sameDay: Job[], time
 export function jobWarnings(job: Job, sameDay: Job[], timeOff: TimeOff[], people: Profile[], vehicles: Vehicle[]): string[] {
   if (!live(job)) return [];
   const out: string[] = [];
+  if (job.infants > 0) out.push(`${job.infants} infant${job.infants === 1 ? "" : "s"}: make sure the vehicle has ${job.infants === 1 ? "a baby seat" : "baby seats"}.`);
   if (job.driver_id) {
     const name = people.find((p) => p.user_id === job.driver_id)?.display_name ?? "The driver";
     const c = driverConflict(job, job.driver_id, sameDay, timeOff);
@@ -47,6 +49,17 @@ export function jobWarnings(job: Job, sameDay: Job[], timeOff: TimeOff[], people
     const clash = sameDay.find((o) => o.id !== job.id && o.vehicle_id === job.vehicle_id && live(o) && overlaps(job, o));
     if (v && clash) out.push(`${v.name} is also booked for ${jobRef(clash.job_no)} ${timeWindow(clash)}.`);
     if (v?.seats && job.passengers > v.seats) out.push(`${v.name} has ${v.seats} seats but this job has ${job.passengers} passengers.`);
+    if (v?.cof_due && v.cof_due < job.pickup_date) out.push(`${v.name}'s COF runs out on ${fmtDate(v.cof_due)}, before this job.`);
+    if (v?.rego_due && v.rego_due < job.pickup_date) out.push(`${v.name}'s rego runs out on ${fmtDate(v.rego_due)}, before this job.`);
   }
+  // The same customer twice within a few hours on one day, and not the two
+  // legs of one trip: often the same booking entered twice.
+  const key = customerKey(job.customer_name, job.customer_phone);
+  const twin = sameDay.find(
+    (o) =>
+      o.id !== job.id && o.id !== job.linked_job_id && o.linked_job_id !== job.id && live(o) &&
+      customerKey(o.customer_name, o.customer_phone) === key && Math.abs(minutesOf(o.pickup_time) - minutesOf(job.pickup_time)) < 180,
+  );
+  if (twin) out.push(`Possible double booking: ${bookingRef(twin)} is the same customer at ${fmtTime(twin.pickup_time)}.`);
   return out;
 }
