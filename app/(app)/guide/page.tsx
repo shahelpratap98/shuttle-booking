@@ -79,6 +79,15 @@ export default async function GuidePage() {
                 On a saved booking, <b>Add return trip</b> makes the trip back with the addresses swapped, linked to the first one. <b>Copy</b> starts a
                 new booking with the same details. Tick <b>Shared ride</b> when several bookings go in one vehicle, so they aren&rsquo;t flagged as a clash.
               </Tip>
+              <ul className="list-disc pl-5">
+                <li><b>Children and infants</b>: put how many of the people are children or babies; infants remind you to fit a baby seat.</li>
+                <li><b>Deposit</b>: if they&rsquo;ve paid part (a tour deposit), put it in <b>Paid so far</b>. The rest shows as owed, and on a pay-on-the-day job the driver collects only the rest.</li>
+                <li><b>Invoice # and Bill to</b>: for invoiced work and account customers (a hotel, school or company), so Invoices groups them.</li>
+                <li><b>Another operator</b>: if Quick Shuttle or another company does the job, choose <b>Another operator…</b> as the driver, type their name, and put what we pay them under Cost.</li>
+                <li><b>Repeat this booking</b> (on a saved booking): the same trip on the days you tick until a date, for contract and school runs.</li>
+                <li><b>Flag for attention</b> (on a saved booking): a note like &ldquo;look after this client&rdquo; or &ldquo;check the address&rdquo;. Flagged bookings show on the dashboard and under the Flagged tab until someone clears the flag.</li>
+                <li>The booking page warns you about a <b>possible double booking</b> (same customer, same day) and a vehicle whose COF or rego runs out first.</li>
+              </ul>
 
               <h3>Give out the jobs</h3>
               <Steps>
@@ -117,7 +126,19 @@ export default async function GuidePage() {
                 <li><b>Status</b> on a booking: Confirm an enquiry, Mark done, Mark no-show or Cancel. Cancel rather than delete, so it still counts in the numbers.</li>
                 <li><b>Time off</b>: add anyone&rsquo;s days off. They show on the calendar and in the Assign list.</li>
                 <li><b>Dashboard</b>: bookings, charges, driver pay and {share} for any period, month by month and week by week, where bookings come from, busiest days and times, and totals per driver and vehicle.</li>
-                <li><b>Vehicles</b>: add or retire vehicles, with rego and seats.</li>
+                <li><b>Vehicles</b>: add or retire vehicles, with rego, seats and the COF, rego and service due dates. The dashboard reminds you a month ahead.</li>
+              </ul>
+
+              <h3>Money</h3>
+              <ul className="list-disc pl-5">
+                <li>
+                  <b>Driver pay</b>: each week, what every driver (and other operator) is owed for finished jobs, less any cash they collected from customers.
+                  Pay them, then <b>Mark paid out</b>. Drivers see &ldquo;paid to you&rdquo; on their jobs. Wrong one? <b>Undo</b> under Paid out recently.
+                </li>
+                <li><b>Invoices</b>: money still owed for trips (invoiced, on account, part-paid), oldest first, grouped by invoice or customer. <b>Mark all paid</b> when it arrives.</li>
+                <li><b>Costs</b>: running costs each month (Google and Facebook ads, staff, fuel cards…) and what&rsquo;s left after them. <b>Copy last month&rsquo;s costs</b> saves typing. The <b>run calculator</b> works out what a contract or daily shuttle brings in.</li>
+                <li><b>Leads</b>: how many enquiries came in each day, and how many bookings were taken, so you can see how many turn into bookings.</li>
+                <li><b>Totals → Each month in detail</b>: bookings taken that month, GST, running costs and what&rsquo;s left. <b>How each month was paid</b> splits it by online, cash, card, bank and invoice.</li>
               </ul>
 
               <h3>Spreadsheets</h3>
@@ -140,6 +161,7 @@ export default async function GuidePage() {
                 <li>Someone locked out? Open their card, <b>Make a new sign-in link</b>, and send it to them.</li>
                 <li><b>Settings</b>: business name, currency and time zone (the time zone decides what &ldquo;today&rdquo; is).</li>
                 <li><b>Settings → Weekly target</b>: the total booking $ you aim for each week. Totals and the dashboard show every week against it. Drivers never see it.</li>
+                <li><b>Settings → GST registered</b>: tick it and Totals and the Excel download show the GST inside your charges (3/23 of the total).</li>
               </ul>
             </Part>
           </>

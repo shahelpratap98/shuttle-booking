@@ -38,6 +38,13 @@ export default async function SettingsPage() {
               <p className="field-hint">Decides what &ldquo;today&rdquo; is.</p>
             </div>
           </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="gst_registered" defaultChecked={s.gst_registered} className="mt-0.5 size-4" />
+            <span>
+              <b>GST registered, prices include GST</b>
+              <span className="block text-muted">Shows the GST in each month&rsquo;s charges (3/23 of the total) on Totals and in the Excel download.</span>
+            </span>
+          </label>
         </ActionForm>
       </section>
 

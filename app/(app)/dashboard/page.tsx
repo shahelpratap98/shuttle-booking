@@ -6,6 +6,7 @@ import { PaymentChip, PersonDot, StatusChip } from "@/components/chips";
 import { PageHeader } from "@/components/page-header";
 import { StatTile } from "@/components/stat-tile";
 import { TargetBar } from "@/components/target-bar";
+import { vehicleAlerts } from "@/lib/vehicles";
 import { requireOffice } from "@/lib/auth";
 import { BILLABLE, NO_DRIVER, SERVICE_LABEL, SOURCE_LABEL, UNASSIGNED_COLOUR } from "@/lib/constants";
 import { addDays, addMonths, endOfMonth, fmtDay, fmtShort, fmtTime, startOfMonth, startOfWeek, todayIn, WEEKDAYS } from "@/lib/dates";
@@ -40,6 +41,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     store.vehicles(),
     store.weeklyTarget(),
   ]);
+  const [flagged, unpaidDrivers] = await Promise.all([
+    store.jobs({ flagged: true }), // a flag stays until someone clears it, however old the trip
+    store.jobs({ unsettled: true, to: today, statuses: ["completed", "no_show"] }),
+  ]);
+  const vehicleDue = vehicleAlerts(vehicles, today);
+  const driverOwed = unpaidDrivers.reduce((s, j) => s + j.driver_pay - (j.collected_via === "cash" ? j.collect_amount : 0), 0);
+  const driversOwed = new Set(unpaidDrivers.filter((j) => j.driver_pay > 0).map((j) => j.driver_id ?? j.operator)).size;
 
   const inRange = (from: string, to: string) => jobs.filter((j) => j.pickup_date >= from && j.pickup_date <= to);
   const periodJobs = inRange(period.from, period.to);
@@ -164,6 +172,38 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <Fact label="Done, not paid yet" value={m(waiting.reduce((s, j) => s + charge(j), 0))} warn={waiting.length > 0} />
             <Fact label="Those bookings" value={num(waiting.length)} />
           </dl>
+        </Card>
+      </section>
+
+      <section aria-label="Also to look at" className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <Card title={`Flagged (${flagged.length})`} sub="Bookings someone marked for attention" action={<Link href="/jobs?view=flagged" className="link text-sm">See all</Link>}>
+          {flagged.length === 0 ? (
+            <p className="text-sm text-muted">Nothing flagged.</p>
+          ) : (
+            <ul className="-my-1 divide-y divide-line text-sm">
+              {flagged.slice(0, 5).map((j) => (
+                <li key={j.id} className="py-1.5">
+                  <Link href={`/jobs/${j.id}`} className="font-semibold hover:underline">{fmtDay(j.pickup_date)} · {j.customer_name}</Link>
+                  <span className="block truncate text-bad">⚑ {j.flag_note}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card title="Driver pay" sub="Finished jobs not paid out yet, less cash drivers hold" action={<Link href="/driver-pay" className="link text-sm">Pay run</Link>}>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <Fact label="To pay out" value={m(driverOwed)} warn={driverOwed > 0} />
+            <Fact label="Drivers waiting" value={num(driversOwed)} />
+          </dl>
+        </Card>
+        <Card title="Vehicles" sub="COF, rego and service due in the next 30 days" action={<Link href="/vehicles" className="link text-sm">Vehicles</Link>}>
+          {vehicleDue.length === 0 ? (
+            <p className="text-sm text-muted">Nothing due. Add COF, rego and service dates on the Vehicles page to be reminded.</p>
+          ) : (
+            <ul className="-my-1 divide-y divide-line text-sm">
+              {vehicleDue.map((a) => <li key={`${a.vehicle.id}-${a.what}`} className={`py-1.5 ${a.overdue ? "font-semibold text-bad" : ""}`}>{a.text}</li>)}
+            </ul>
+          )}
         </Card>
       </section>
 

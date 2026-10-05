@@ -44,6 +44,41 @@ Driver Pay | More Info | Flight Information | Booking Reference).
   per-vehicle totals; every booking laid out like the sheet.
 - **Import** the existing spreadsheet (Bookings → Import) and **download**
   any range back out in the sheet's column order for Excel.
+- **Everything else the 2025 workbook tracked** (see "From the 2025 workbook"
+  below): driver pay runs, invoices and deposits, other operators, flags,
+  repeating runs, children/infants, vehicle COF / rego / service dates, daily
+  leads, monthly running costs, bookings taken per month, how each month was
+  paid, GST, and a contract-run calculator.
+
+## From the 2025 workbook
+
+`2025 Booking.xlsx` had more than the monthly tabs. Where each part lives now:
+
+| In the workbook | In the app |
+|---|---|
+| Monthly tabs Aug-2025 → Jul-2027 (all three layouts) | Bookings → Import. Older tabs without Driver / Driver Pay columns, the driver named under More Info, "Online Payment", "On account", "Invoice # INV-0092", "Customer Paid Direct", tours dated "06 to 13", costs typed as negative rows, "500 to Quick Shuttle", "Trekway to pay $280" are all read |
+| `Q1 =SUM(K:K)` month totals; Driver tab Month list | Totals: month by month, year total |
+| Driver tab "New booking for month" | Totals → Each month in detail → Taken this month (from the booked-on day; imports read it from TW-ddmmyyyy / TW-yyyymmdd / TSM-…-ddmmyy references) |
+| Driver tab "Week Ending" amounts | Totals → Week by week (Mon – Sun, with the week-ending date) |
+| "Paid Shef" beside rows | Driver pay: pay runs per driver, less cash they hold; imported "Paid Shef" rows come in as paid out |
+| Summary earning (per driver Earning / Driver Pay / Trekway) | Dashboard → Drivers and vehicles |
+| More Info invoice numbers, "On account", "Charge Hotel", tours "Paid 3000" | Booking form: Invoice #, Bill to, Paid so far; Invoices page |
+| Online Payment / Cash / person totals (`SUMIF`) | Totals → How each month was paid |
+| Quick Shuttle, Maxcare in Driver / Vehicle | Driver: "Another operator…" (what we pay them = driver pay) |
+| Yellow / red highlighted rows | Flag for attention; Flagged tab; dashboard |
+| Shared one off (TSM-SS, Ad / Ch / Inf) | Shared ride tick, children and infants on the booking |
+| Lead Record | Leads page (enquiries a day, conversion) |
+| Build up JD: marketing costs, contract run sums | Costs page: monthly running costs, marketing per booking, run calculator |
+| Plan: GST reconciliations, vehicle servicing | GST setting (Totals, Excel download); vehicle COF / rego / service due dates with reminders |
+| Plan, Build up JD job descriptions | Not in the app (people's responsibilities, not booking data) |
+
+To try the app on a whole workbook without a database:
+
+```bash
+npx tsx --conditions=react-server scripts/demo-from-workbook.ts "C:/path/2025 Booking.xlsx" Shef,Ali,Mo,Sunny
+```
+
+(it overwrites `.demo-data/state.json`; copy that file first to keep it).
 
 ## Try it now (demo mode)
 
@@ -73,8 +108,9 @@ security), Tailwind 4. Runs on Vercel's free tier with a free Supabase project.
 2. **Create the tables.** Supabase → SQL editor → paste all of
    `supabase/all-migrations.sql` → Run. **Already live?** Run only the
    migration files in `supabase/migrations/` that are newer than your last
-   one, oldest first (e.g. `20260930000100_totals_repeat.sql` for totals
-   targets and repeat customers). Running the whole file again fails, because
+   one, oldest first (`20260930000100_totals_repeat.sql` for totals,
+   targets and repeat customers; `20261006000100_excel_parity.sql` for driver
+   pay, invoices, leads, costs and the rest). Running the whole file again fails, because
    the tables already exist.
 3. **Turn off public sign-ups.** Authentication → Sign In / Providers → Email:
    leave Email on, turn *Allow new users to sign up* off. Only people you add
@@ -175,7 +211,7 @@ npm run check:import -- "C:/path/Booking.xlsx"
 ## Checks
 
 ```bash
-npm run test:sql   # database security rules (37 checks)
+npm run test:sql   # database security rules (49 checks)
 npx tsc --noEmit   # types
 npm run lint
 npm run build

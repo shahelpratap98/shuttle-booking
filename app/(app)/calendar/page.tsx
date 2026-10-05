@@ -282,7 +282,7 @@ function Agenda({
                         </span>
                         <span className="block truncate text-sm text-muted">{j.pickup_address} → {j.dropoff_address}</span>
                         <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs font-semibold text-muted">
-                          {office ? <span>{j.driver_id ? nameOf.get(j.driver_id) : NO_DRIVER}</span> : null}
+                          {office ? <span>{j.driver_id ? nameOf.get(j.driver_id) : (j.operator ?? NO_DRIVER)}</span> : null}
                           {j.collect_amount > 0 && !j.collected_via ? <span className="text-info">$ collect</span> : null}
                           {j.is_shared ? <span>Shared</span> : null}
                           {j.status !== "confirmed" ? <span>{STATUS_LABEL[j.status]}</span> : null}
