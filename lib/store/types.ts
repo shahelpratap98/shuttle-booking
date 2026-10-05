@@ -1,4 +1,4 @@
-import type { Job, JobInput, JobMoney, JobQuery, JobStatus, PaymentMethod, Profile, Result, Role, Settings, TimeOff, Vehicle } from "@/lib/types";
+import type { Job, JobInput, JobMoney, JobQuery, JobStatus, LeadDay, Overhead, PaymentMethod, Profile, Result, Role, Settings, TimeOff, Vehicle } from "@/lib/types";
 
 export interface Customer {
   name: string;
@@ -42,6 +42,20 @@ export interface Store {
   // For each job id the viewer may see: how many bookings that customer made
   // before it (0 = first time). Missing ids mean "not known".
   repeatCounts(ids: string[]): Promise<Record<string, number>>;
+
+  // Driver pay runs: mark these jobs' driver pay (and any cash collected) as
+  // settled on a day, or null to undo. Office only.
+  settleDriverPay(jobIds: string[], on: string | null): Promise<Result>;
+  // The office's "look at this" marker; null clears it.
+  setFlag(jobId: string, note: string | null): Promise<Result>;
+  // Mark bookings paid in one go (an invoice that's been paid). Office only.
+  markPaid(jobIds: string[], on: string, method: PaymentMethod | null): Promise<Result>;
+
+  leads(from: string, to: string): Promise<LeadDay[]>;
+  saveLeads(l: LeadDay): Promise<Result>;
+  overheads(from: string, to: string): Promise<Overhead[]>;
+  saveOverhead(id: string | null, o: Omit<Overhead, "id">): Promise<Result>;
+  deleteOverhead(id: string): Promise<Result>;
 
   // The usual weekly target for total booking $ (office only; null = none).
   weeklyTarget(): Promise<number | null>;

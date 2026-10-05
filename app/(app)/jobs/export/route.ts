@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isOffice } from "@/lib/auth";
 import { METHOD_LABEL, PAYMENT_LABEL, SERVICE_LABEL, SOURCE_LABEL, STATUS_LABEL } from "@/lib/constants";
 import { fmtTime, isIsoDate } from "@/lib/dates";
-import { businessPay, charge, expenses, jobRef } from "@/lib/format";
+import { businessPay, charge, expenses, gstOf, jobRef } from "@/lib/format";
 import { hit } from "@/lib/rate-limit";
 import { getStore } from "@/lib/store";
 import type { Job } from "@/lib/types";
@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
     "Charges", `${firstWord} Pay`, "Driver Pay", "More Info", "Flight Information", "Booking Reference",
     // extras
     "Status", "Email", "Booked through", "Service", "Payment", "Shared", "Bags", "Expenses", "Driver notes", "Job",
+    "Invoice #", "Bill to", "Paid so far", "Other operator", "Children", "Infants", "Booked on", "Driver paid out",
+    ...(settings.gst_registered ? ["GST in charge"] : []),
   ];
   const rows = jobs.map((j) => [
     j.pickup_date,
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
     j.dropoff_address,
     fmtTime(j.pickup_time),
     j.passengers,
-    j.driver_id ? name.get(j.driver_id) : "TBC",
+    j.driver_id ? name.get(j.driver_id) : j.operator ?? "TBC",
     j.vehicle_id ? vname.get(j.vehicle_id) : "",
     j.customer_name,
     j.customer_phone,
@@ -56,6 +58,15 @@ export async function GET(request: NextRequest) {
     j.money && expenses(j) ? expenses(j) : "",
     j.driver_notes,
     jobRef(j.job_no),
+    j.money?.invoice_no,
+    j.money?.bill_to,
+    j.money?.amount_paid || "",
+    j.operator,
+    j.children || "",
+    j.infants || "",
+    j.booked_on,
+    j.driver_settled_on,
+    ...(settings.gst_registered ? [j.money ? gstOf(charge(j)) : ""] : []),
   ]);
 
   const csv = [header, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");

@@ -156,6 +156,37 @@ ok((await as(DISP, async (tx) => (await tx.query(`select * from public.targets`)
 ok((await as(DISP, async (tx) => (await tx.query(`update public.targets set weekly_booking_target = 1 returning 1`)).rows)).length === 0, "the office can't change the target");
 ok((await as(OWNER, async (tx) => (await tx.query(`update public.targets set weekly_booking_target = 5000 returning 1`)).rows)).length === 1, "the owner sets the weekly target");
 
+// deposits, invoices, when it was booked, other operators
+const tour = await as(DISP, async (tx) => (await tx.query(`select public.save_job(null, $1, $2) as id`, [
+  { ...jobFor(DRV_A), booking_ref: null, operator: null, children: 1, infants: 0, flag_note: "Check the pick-up" },
+  { ...money, price: 900, amount_paid: 300, payment_status: "pay_on_day", invoice_no: "INV-0137", bill_to: "Gemma Karaka Hotel" },
+])).rows[0].id);
+const t = (await db.query(`select j.collect_amount::float as collect, j.booked_on is not null as booked, j.children, j.flag_note, m.amount_paid::float as paid, m.invoice_no, m.bill_to
+  from public.jobs j join public.job_money m on m.job_id = j.id where j.id = $1`, [tour])).rows[0];
+ok(t.collect === 600 && t.paid === 300, "pay on the day after a deposit: the driver collects what's left");
+ok(t.invoice_no === "INV-0137" && t.bill_to === "Gemma Karaka Hotel" && t.children === 1 && t.flag_note, "invoice number, bill-to, children and the flag are saved");
+ok(t.booked, "a new booking is stamped with the day it was taken");
+const old = await as(DISP, async (tx) => (await tx.query(`select public.save_job(null, $1, $2) as id`, [{ ...jobFor(null), booked_on: null, operator: "Quick Shuttle" }, money])).rows[0].id);
+const o = (await db.query(`select booked_on, operator from public.jobs where id = $1`, [old])).rows[0];
+ok(o.booked_on === null && o.operator === "Quick Shuttle", "an import can leave 'booked on' unknown; a job can go to another operator");
+await as(DISP, (tx) => tx.query(`select public.save_job($1, $2, $3)`, [tour, { ...jobFor(DRV_A), booking_ref: null }, { ...money, price: 900 }]));
+ok((await db.query(`select booked_on is not null as b, flag_note from public.jobs where id = $1`, [tour])).rows[0].b, "editing keeps the day it was booked");
+ok(await fails(DISP, `select public.save_job(null, $1, $2)`, [{ ...jobFor(null), passengers: 2, children: 2, infants: 1 }, money]), "children and infants can't be more than the passengers");
+
+// driver pay runs: the office settles, the driver can't mark themselves paid
+const settled = await as(DISP, async (tx) => (await tx.query(`update public.jobs set driver_settled_on = '2026-10-05' where id = $1 returning 1`, [tour])).rows);
+ok(settled.length === 1, "the office marks a driver's job as paid out");
+const selfPaid = await as(DRV_A, async (tx) => (await tx.query(`update public.jobs set driver_settled_on = '2026-10-05' where id = $1 returning 1`, [first])).rows);
+ok(selfPaid.length === 0, "a driver can't mark their own pay as paid");
+
+// leads and overheads: office only
+await as(DISP, (tx) => tx.query(`insert into public.lead_days (day, leads, local) values ('2026-10-05', 14, 8)`));
+await as(OWNER, (tx) => tx.query(`insert into public.overheads (month, category, amount) values ('2026-10-01', 'Google ads', 1350)`));
+ok((await as(DRV_A, async (tx) => (await tx.query(`select * from public.lead_days`)).rows)).length === 0, "a driver can't see the leads");
+ok((await as(DRV_A, async (tx) => (await tx.query(`select * from public.overheads`)).rows)).length === 0, "a driver can't see the overheads");
+ok((await as(DISP, async (tx) => (await tx.query(`select * from public.overheads`)).rows)).length === 1, "the office sees the overheads");
+ok(await fails(OWNER, `insert into public.overheads (month, category, amount) values ('2026-10-05', 'x', 1)`), "overheads are recorded per month (the 1st)");
+
 // deactivated people lose everything
 await as(OWNER, (tx) => tx.query(`update public.profiles set is_active = false where user_id = $1`, [DRV_B]));
 const seenByInactive = await as(DRV_B, async (tx) => (await tx.query(`select id from public.jobs`)).rows);

@@ -23,6 +23,8 @@ export interface PreviewRow {
   ref: string;
   flight: string;
   shared: boolean;
+  operator: string;
+  bookedOn: string;
   duplicate: boolean;
   warnings: string[];
 }
@@ -75,7 +77,15 @@ export async function importBookings(_prev: ImportState, fd: FormData): Promise<
   const dates = parsed.bookings.map((b) => b.input.pickup_date).sort();
   const existing = dates.length ? await store.jobs({ from: dates[0], to: dates[dates.length - 1] }) : [];
   const known = new Set(existing.map(bookingKey));
-  const isDup = (b: ParsedBooking) => known.has(bookingKey(b.input));
+  // ...or listed twice in this file (the same trip copied onto two tabs).
+  const seen = new Set<string>();
+  const dupOf = new Set<ParsedBooking>();
+  for (const b of parsed.bookings) {
+    const k = bookingKey(b.input);
+    if (known.has(k) || seen.has(k)) dupOf.add(b);
+    seen.add(k);
+  }
+  const isDup = (b: ParsedBooking) => dupOf.has(b);
 
   const personName = new Map(people.map((p) => [p.user_id, p.display_name]));
   const vehicleName = new Map(vehicles.map((v) => [v.id, v.name]));
@@ -87,7 +97,7 @@ export async function importBookings(_prev: ImportState, fd: FormData): Promise<
     pickup: b.input.pickup_address,
     dropoff: b.input.dropoff_address,
     people: b.input.passengers,
-    driver: b.input.driver_id ? personName.get(b.input.driver_id) ?? "" : "TBC",
+    driver: b.input.driver_id ? personName.get(b.input.driver_id) ?? "" : b.input.operator ? `${b.input.operator} (other operator)` : "TBC",
     vehicle: b.input.vehicle_id ? vehicleName.get(b.input.vehicle_id) ?? "" : "",
     name: b.input.customer_name,
     charge: b.money.price,
@@ -96,6 +106,8 @@ export async function importBookings(_prev: ImportState, fd: FormData): Promise<
     ref: b.input.booking_ref ?? "",
     flight: b.input.flight_no ?? "",
     shared: b.input.is_shared,
+    operator: b.input.operator ?? "",
+    bookedOn: b.input.booked_on ?? "",
     duplicate: isDup(b),
     warnings: b.warnings,
   }));
@@ -117,21 +129,30 @@ export async function importBookings(_prev: ImportState, fd: FormData): Promise<
     };
   }
 
-  // Import: outbound legs first so returns can link to them.
+  // Import: outbound legs and single trips first (a few at a time, a big
+  // workbook has 1,000+ rows), then return legs so they can link to them.
   const outIds = new Map<string, string>();
+  const settled = new Map<string, string[]>(); // day -> job ids whose driver was already paid ("Paid Shef")
   const failed: { sheet: string; row: number; error: string }[] = [];
   let imported = 0;
-  for (const b of fresh) {
+  const save = async (b: ParsedBooking) => {
     const input = { ...b.input };
     if (b.leg === "ret" && b.refBase && outIds.has(b.refBase)) input.linked_job_id = outIds.get(b.refBase)!;
     const res = await store.saveJob(null, input, b.money);
     if (!res.ok) {
       failed.push({ sheet: b.sheet, row: b.row, error: res.error });
-      continue;
+      return;
     }
     imported++;
     if (b.leg === "out" && b.refBase) outIds.set(b.refBase, res.data);
-  }
+    if (b.settledOn) settled.set(b.settledOn, [...(settled.get(b.settledOn) ?? []), res.data]);
+  };
+  const inBatches = async (list: ParsedBooking[], size: number) => {
+    for (let i = 0; i < list.length; i += size) await Promise.all(list.slice(i, i + size).map(save));
+  };
+  await inBatches(fresh.filter((b) => b.leg !== "ret"), 8);
+  await inBatches(fresh.filter((b) => b.leg === "ret"), 8);
+  for (const [day, ids] of settled) await store.settleDriverPay(ids, day);
   revalidatePath("/", "layout");
   return {
     ok: failed.length === 0,

@@ -77,7 +77,7 @@ export function ImportForm({ currency }: { currency: string }) {
                     <td>{r.time}</td>
                     <td className="max-w-80">
                       <p className="truncate">{r.pickup} → {r.dropoff}</p>
-                      {r.duplicate ? <p className="text-xs no-underline">Already in the app, skipped</p> : null}
+                      {r.duplicate ? <p className="text-xs no-underline">Already in the app (or listed twice in the file), skipped</p> : null}
                       {!r.duplicate && r.warnings.map((w) => <p key={w} className="text-xs font-semibold text-warn">{w}</p>)}
                     </td>
                     <td className="text-right">{r.people}</td>

@@ -12,6 +12,7 @@ import { customerKey } from "@/lib/customers";
 import { fmtDate, fmtMonth, fmtShort, startOfWeek } from "@/lib/dates";
 import type { Customer } from "@/lib/store/types";
 import type { Job, JobStatus, PaymentStatus, Profile, Vehicle } from "@/lib/types";
+import { OPERATOR } from "@/lib/job-form";
 import type { BookedSoFar } from "./form-data";
 
 type Defaults = Partial<Job> & { money?: Job["money"] };
@@ -57,7 +58,8 @@ export function JobForm({
 
   // The fields that feed the live sums are controlled; the rest aren't.
   const [duration, setDuration] = useState(String(d.duration_min ?? 240));
-  const [driverId, setDriverId] = useState(d.driver_id ?? "");
+  const [driverId, setDriverId] = useState(d.driver_id ?? (d.operator ? OPERATOR : ""));
+  const [paidSoFar, setPaidSoFar] = useState(m?.amount_paid ? String(m.amount_paid) : "");
   const [price, setPrice] = useState(m ? String(m.price) : "");
   const [driverPay, setDriverPay] = useState(d.driver_pay ? String(d.driver_pay) : "");
   const [fuel, setFuel] = useState(m?.fuel_cost ? String(m.fuel_cost) : "");
@@ -78,6 +80,8 @@ export function JobForm({
   const toDriver = asNum(driverPay);
   const extra = asNum(fuel) + asNum(tolls) + asNum(other);
   const kept = charged - toDriver;
+  const toOperator = driverId === OPERATOR;
+  const balance = Math.max(charged - asNum(paidSoFar), 0);
 
   // Picking a known customer fills in their phone and email if those are empty.
   const onCustomer = (value: string) => {
@@ -152,10 +156,16 @@ export function JobForm({
             <Field label="# of people" htmlFor="passengers">
               <input id="passengers" name="passengers" type="number" min={1} max={99} required defaultValue={d.passengers ?? 1} className="field" />
             </Field>
+            <Field label="of which children" htmlFor="children">
+              <input id="children" name="children" type="number" min={0} max={99} defaultValue={d.children ?? 0} className="field" />
+            </Field>
+            <Field label="of which infants" htmlFor="infants" hint="Under 2, need a baby seat">
+              <input id="infants" name="infants" type="number" min={0} max={99} defaultValue={d.infants ?? 0} className="field" />
+            </Field>
             <Field label="Bags" htmlFor="luggage">
               <input id="luggage" name="luggage" type="number" min={0} max={199} defaultValue={d.luggage ?? 0} className="field" />
             </Field>
-            <div className="col-span-2">
+            <div className="col-span-2 sm:col-span-4">
               <Field label="Flight information" htmlFor="flight_no" hint="Flight number, or ship / wharf details">
                 <input id="flight_no" name="flight_no" maxLength={60} defaultValue={d.flight_no ?? ""} className="field" placeholder="NZ175" />
               </Field>
@@ -218,8 +228,15 @@ export function JobForm({
                   {office.map((p) => <option key={p.user_id} value={p.user_id}>{p.display_name} ({ROLE_LABEL[p.role]})</option>)}
                 </optgroup>
               ) : null}
+              <option value={OPERATOR}>Another operator…</option>
             </select>
           </Field>
+          {toOperator ? (
+            <Field label="Operator" htmlFor="operator" hint="The company doing the job, e.g. Quick Shuttle. Put what we pay them under Cost.">
+              <input id="operator" name="operator" required maxLength={80} defaultValue={d.operator ?? ""} list="operators" className="field" />
+              <datalist id="operators">{["Quick Shuttle", "Maxcare"].map((o) => <option key={o} value={o} />)}</datalist>
+            </Field>
+          ) : null}
           <Field label="Vehicle" htmlFor="vehicle_id">
             <select id="vehicle_id" name="vehicle_id" defaultValue={d.vehicle_id ?? ""} className="field">
               <option value="">Not set</option>
@@ -235,7 +252,7 @@ export function JobForm({
             <Field label={`Charge (${currency})`} htmlFor="price">
               <input id="price" name="price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className="field text-lg font-semibold" placeholder="0" />
             </Field>
-            <Field label="Driver pay" htmlFor="driver_pay">
+            <Field label={toOperator ? "Cost (paid to them)" : "Driver pay"} htmlFor="driver_pay">
               <input id="driver_pay" name="driver_pay" inputMode="decimal" value={driverPay} onChange={(e) => setDriverPay(e.target.value)} className="field text-lg" placeholder="0" />
               {suggestPay !== null && asNum(driverPay) !== suggestPay ? (
                 <button type="button" onClick={() => setDriverPay(String(suggestPay))} className="mt-1 text-left text-xs font-semibold text-accent-text hover:underline">
@@ -275,8 +292,23 @@ export function JobForm({
               {PAYMENTS.map((p) => <option key={p} value={p}>{PAYMENT_LABEL[p]}</option>)}
             </select>
           </Field>
+          {payment !== "paid" ? (
+            <Field label="Paid so far (deposit)" htmlFor="amount_paid" hint={asNum(paidSoFar) > 0 ? `Still to pay: ${fmt(balance)}` : "For deposits and part payments"}>
+              <input id="amount_paid" name="amount_paid" inputMode="decimal" value={paidSoFar} onChange={(e) => setPaidSoFar(e.target.value)} className="field" placeholder="0" />
+            </Field>
+          ) : null}
           {payment === "pay_on_day" ? (
-            <p className="rounded-lg bg-info-bg px-3 py-2 text-sm text-info">The driver sees &ldquo;Collect {fmt(charged)}&rdquo; on this job and records cash or card when it&rsquo;s paid.</p>
+            <p className="rounded-lg bg-info-bg px-3 py-2 text-sm text-info">The driver sees &ldquo;Collect {fmt(balance)}&rdquo; on this job and records cash or card when it&rsquo;s paid.</p>
+          ) : null}
+          {payment !== "pay_on_day" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Invoice #" htmlFor="invoice_no">
+                <input id="invoice_no" name="invoice_no" maxLength={40} defaultValue={m?.invoice_no ?? ""} className="field" placeholder="INV-0092" />
+              </Field>
+              <Field label="Bill to" htmlFor="bill_to" hint="If not the passenger">
+                <input id="bill_to" name="bill_to" maxLength={120} defaultValue={m?.bill_to ?? ""} className="field" placeholder="Hotel, school…" />
+              </Field>
+            </div>
           ) : null}
           {payment === "paid" ? (
             <div className="grid grid-cols-2 gap-3">

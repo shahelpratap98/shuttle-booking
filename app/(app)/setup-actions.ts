@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/components/action-form";
 import { requireOffice, requireOwner } from "@/lib/auth";
 import { ROLES } from "@/lib/constants";
+import { isIsoDate } from "@/lib/dates";
 import { hit, waitMessage } from "@/lib/rate-limit";
 import { isDemo } from "@/lib/store";
 import { removeSampleData } from "@/lib/store/demo";
@@ -94,6 +95,7 @@ export async function saveVehicle(_prev: ActionState, fd: FormData): Promise<Act
   const cost = numberOrNull(fd, "cost_per_km", "Cost per km", 0, 50);
   if (typeof seats === "string") return { ok: false, message: seats };
   if (typeof cost === "string") return { ok: false, message: cost };
+  const due = (name: string) => (isIsoDate(text(fd, name)) ? text(fd, name) : null);
   const res = await store.saveVehicle(id, {
     name,
     registration: text(fd, "registration").toUpperCase().slice(0, 20) || null,
@@ -101,6 +103,9 @@ export async function saveVehicle(_prev: ActionState, fd: FormData): Promise<Act
     cost_per_km: cost,
     notes: text(fd, "notes").slice(0, 500) || null,
     is_active: id ? checked(fd, "is_active") : true,
+    cof_due: due("cof_due"),
+    rego_due: due("rego_due"),
+    service_due: due("service_due"),
   });
   if (!res.ok) return { ok: false, message: res.error };
   revalidatePath("/vehicles");
@@ -121,7 +126,7 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
   } catch {
     return { ok: false, message: "That time zone isn't recognised. Use a name like Pacific/Auckland." };
   }
-  const res = await store.saveSettings({ business_name: businessName, currency, timezone });
+  const res = await store.saveSettings({ business_name: businessName, currency, timezone, gst_registered: checked(fd, "gst_registered") });
   if (!res.ok) return { ok: false, message: res.error };
   revalidatePath("/", "layout");
   return { ok: true, message: "Saved." };

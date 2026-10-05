@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { deleteJob } from "@/app/(app)/jobs/actions";
+import { deleteJob, flagJob, repeatJob } from "@/app/(app)/jobs/actions";
 import { JobCard } from "@/app/(app)/jobs/job-card";
 import { AssignForm, DriverDoneForm, StatusButtons } from "@/app/(app)/jobs/job-controls";
 import { PaymentChip, PersonDot, RepeatChip, StatusChip, Unassigned } from "@/components/chips";
+import { ActionForm } from "@/components/action-form";
 import { ActionSubmit } from "@/components/pending-buttons";
 import { TripActions } from "@/components/trip-actions";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
@@ -13,8 +14,8 @@ import { isOffice, requireViewer } from "@/lib/auth";
 import { jobWarnings } from "@/lib/clashes";
 import { BILLABLE, METHOD_LABEL, SERVICE_LABEL, SOURCE_LABEL, STATUS_LABEL } from "@/lib/constants";
 import { customerKey } from "@/lib/customers";
-import { endOfMonth, fmtDate, fmtDay, fmtDuration, fmtLong, fmtMonth, fmtTime, minutesOf, startOfMonth, timeFromMinutes, todayIn } from "@/lib/dates";
-import { bookingRef, businessPay, charge, expenses, jobRef, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
+import { endOfMonth, fmtDate, fmtDay, fmtDuration, fmtLong, fmtMonth, fmtTime, minutesOf, startOfMonth, timeFromMinutes, todayIn, weekdayIndex, WEEKDAYS } from "@/lib/dates";
+import { bookingRef, businessPay, charge, expenses, gstOf, jobRef, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
 import { jobCardText } from "@/lib/job-card";
 
 export const metadata: Metadata = { title: "Booking" };
@@ -48,6 +49,7 @@ export default async function JobPage({
     saved && office ? store.jobs({ from: startOfMonth(job.pickup_date), to: endOfMonth(job.pickup_date), statuses: BILLABLE }) : Promise.resolve([]),
   ]);
   const earlier = repeats[job.id] ?? 0;
+  const series = office && job.series_id ? await store.jobs({ seriesId: job.series_id }) : [];
   // The office sees the customer's other bookings.
   const history =
     office && earlier
@@ -80,6 +82,7 @@ export default async function JobPage({
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[15px] text-muted">
             <StatusChip status={job.status} />
             {job.is_shared ? <span className="chip bg-info-bg text-info">Shared ride</span> : null}
+            {office && job.flag_note ? <span className="chip bg-bad-bg text-bad">⚑ Flagged</span> : null}
             {SERVICE_LABEL[job.service_type]} · driver busy until about {fmtTime(ends)} ({fmtDuration(job.duration_min)})
           </p>
         </div>
@@ -104,6 +107,9 @@ export default async function JobPage({
         </p>
       ) : null}
       {error ? <p role="alert" className="rounded-lg bg-bad-bg px-3 py-2 text-sm font-semibold text-bad">{error}</p> : null}
+      {office && job.flag_note ? (
+        <p className="rounded-lg border border-bad/30 bg-bad-bg px-4 py-3 text-[15px] font-semibold text-bad">⚑ {job.flag_note}</p>
+      ) : null}
       {warnings.length ? (
         <div role="alert" className="rounded-lg border border-warn/40 bg-warn-bg px-4 py-3 text-sm text-warn">
           <p className="font-bold">Check this before the day</p>
@@ -139,7 +145,19 @@ export default async function JobPage({
               <TripActions phone={job.customer_phone} pickup={job.pickup_address} dropoff={job.dropoff_address} />
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-              <Fact label="# of people" value={job.passengers} />
+              <Fact
+                label="# of people"
+                value={
+                  <>
+                    {job.passengers}
+                    {job.children || job.infants ? (
+                      <span className="font-normal text-muted">
+                        {" "}({[job.children ? `${job.children} child${job.children === 1 ? "" : "ren"}` : "", job.infants ? `${job.infants} infant${job.infants === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ")})
+                      </span>
+                    ) : null}
+                  </>
+                }
+              />
               <Fact label="Bags" value={job.luggage} />
               <Fact label="Flight information" value={job.flight_no ?? "–"} />
               <Fact label="Km driven" value={job.distance_km == null ? "–" : `${job.distance_km} km`} />
@@ -206,9 +224,25 @@ export default async function JobPage({
         <div className="flex min-w-0 flex-col gap-4">
           <Card title="Driver and vehicle">
             <p className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-              {driver ? <span className="inline-flex items-center gap-2 font-semibold"><PersonDot colour={driver.colour} /> {driver.display_name}</span> : <Unassigned />}
+              {driver ? (
+                <span className="inline-flex items-center gap-2 font-semibold"><PersonDot colour={driver.colour} /> {driver.display_name}</span>
+              ) : job.operator ? (
+                <span className="chip bg-idle-bg text-idle">Given to {job.operator}</span>
+              ) : (
+                <Unassigned />
+              )}
               {vehicle ? <span className="text-muted">in the {vehicle.name}{vehicle.registration ? ` (${vehicle.registration})` : ""}</span> : null}
             </p>
+            {office && job.operator ? <p className="mb-3 text-sm text-muted">Another operator is doing this job. What we pay them ({money(job.driver_pay, cur)}) counts as driver pay.</p> : null}
+            {office && (job.driver_id || job.operator) && ["completed", "no_show"].includes(job.status) ? (
+              <p className="mb-3 text-sm">
+                {job.driver_settled_on ? (
+                  <span className="text-ok">Paid out on {fmtDate(job.driver_settled_on)}.</span>
+                ) : (
+                  <>Not paid out yet. <Link href="/driver-pay" className="link">Driver pay</Link></>
+                )}
+              </p>
+            ) : null}
             {office ? (
               <AssignForm
                 jobId={job.id}
@@ -218,7 +252,10 @@ export default async function JobPage({
                 vehicles={vehicleOptions(job, vehicles, sameDay)}
               />
             ) : mine ? (
-              <p className="text-sm">Your pay for this job: <b className="tabular">{money(job.driver_pay, cur)}</b></p>
+              <p className="text-sm">
+                Your pay for this job: <b className="tabular">{money(job.driver_pay, cur)}</b>
+                {job.driver_settled_on ? <span className="text-ok"> · paid to you on {fmtDate(job.driver_settled_on)}</span> : null}
+              </p>
             ) : null}
           </Card>
 
@@ -269,6 +306,64 @@ export default async function JobPage({
                   </span>
                 ) : null}
               </p>
+              {m.amount_paid > 0 && m.payment_status !== "paid" ? (
+                <p className="mt-1 text-sm">
+                  Paid so far <b className="tabular">{money(m.amount_paid, cur)}</b>, still to pay <b className="tabular">{money(Math.max(m.price - m.amount_paid, 0), cur)}</b>
+                </p>
+              ) : null}
+              {m.invoice_no || m.bill_to ? (
+                <p className="mt-1 text-sm text-muted">
+                  {m.invoice_no ? <>Invoice {m.invoice_no}</> : null}
+                  {m.invoice_no && m.bill_to ? " · " : ""}
+                  {m.bill_to ? <>Bill to {m.bill_to}</> : null}
+                </p>
+              ) : null}
+              {settings.gst_registered && m.price > 0 ? <p className="mt-1 text-xs text-muted">Includes GST of {money(gstOf(m.price), cur)}.</p> : null}
+            </Card>
+          ) : null}
+
+          {office ? (
+            <Card title={job.flag_note ? "⚑ Flagged" : "Flag for attention"}>
+              <ActionForm action={flagJob} submitLabel={job.flag_note ? "Update flag" : "Flag it"} submitClass="btn btn-sm btn-quiet" className="flex flex-col gap-2">
+                <input type="hidden" name="job_id" value={job.id} />
+                <label htmlFor="flag_note" className="sr-only">What needs looking at</label>
+                <input id="flag_note" name="flag_note" maxLength={300} defaultValue={job.flag_note ?? ""} placeholder="e.g. Look after this client, check the address" className="field" />
+              </ActionForm>
+              {job.flag_note ? (
+                <ActionForm action={flagJob} submitLabel="Clear flag" submitClass="btn btn-sm btn-quiet mt-2">
+                  <input type="hidden" name="job_id" value={job.id} />
+                  <input type="hidden" name="clear" value="1" />
+                </ActionForm>
+              ) : null}
+            </Card>
+          ) : null}
+
+          {office ? (
+            <Card title="Repeat this booking">
+              {series.length > 1 ? (
+                <p className="mb-2 text-sm">
+                  Part of a repeating run of {series.length} trips, {fmtDay(series[0].pickup_date)} to {fmtDay(series[series.length - 1].pickup_date)}.{" "}
+                  <Link href={`/jobs?view=all&series=${job.series_id}`} className="link">See them</Link>
+                </p>
+              ) : (
+                <p className="mb-2 text-sm text-muted">For contract and school runs: the same trip on the days you tick, up to a date.</p>
+              )}
+              <ActionForm action={repeatJob} submitLabel="Add the trips" pendingLabel="Adding…" submitClass="btn btn-sm btn-quiet" className="flex flex-col gap-3">
+                <input type="hidden" name="job_id" value={job.id} />
+                <fieldset className="flex flex-wrap gap-1.5">
+                  <legend className="field-label">On</legend>
+                  {WEEKDAYS.map((w, i) => (
+                    <label key={w} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line-2 px-2.5 text-sm font-semibold">
+                      <input type="checkbox" name="weekday" value={i} defaultChecked={i === weekdayIndex(job.pickup_date)} className="size-4" />
+                      {w}
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="max-w-48">
+                  <label htmlFor="until" className="field-label">Until</label>
+                  <input id="until" name="until" type="date" min={job.pickup_date} required className="field" />
+                </div>
+              </ActionForm>
             </Card>
           ) : null}
 
