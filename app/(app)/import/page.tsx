@@ -4,6 +4,8 @@ import { requireOffice } from "@/lib/auth";
 import { ImportForm } from "./import-form";
 
 export const metadata: Metadata = { title: "Import spreadsheet" };
+// A whole year's workbook is 1,000+ bookings: give the import time to finish.
+export const maxDuration = 300;
 
 export default async function ImportPage() {
   const { store } = await requireOffice();

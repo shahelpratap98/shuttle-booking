@@ -5,7 +5,8 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { customerKey, customersFrom, earlierBookings } from "@/lib/customers";
 import { todayIn } from "@/lib/dates";
-import type { Job, JobMoney, JobQuery, Profile, Result, TimeOff, Vehicle } from "@/lib/types";
+import type { Job, JobMoney, JobQuery, LeadDay, Overhead, PaymentMethod, Profile, Result, TimeOff, Vehicle } from "@/lib/types";
+import { JOB_DEFAULTS, MONEY_DEFAULTS, VEHICLE_DEFAULTS } from "./defaults";
 import { seedDemo, type DemoData } from "./demo-seed";
 import type { Customer, PersonPatch, Store, VehicleInput } from "./types";
 
@@ -44,9 +45,20 @@ function persist() {
 
 function data(): DemoData {
   if (g.__shuttleDemo?.version !== SEED_VERSION) {
-    g.__shuttleDemo = load() ?? { ...seedDemo(todayIn("Pacific/Auckland")), version: SEED_VERSION };
+    g.__shuttleDemo = upgrade(load() ?? { ...seedDemo(todayIn("Pacific/Auckland")), version: SEED_VERSION });
   }
   return g.__shuttleDemo;
+}
+
+// Demo data saved before a field existed gets that field's starting value,
+// so nobody's saved demo data is thrown away when the app grows.
+function upgrade(d: Stored): Stored {
+  d.settings = { ...d.settings, gst_registered: d.settings.gst_registered ?? false };
+  d.vehicles = d.vehicles.map((v) => ({ ...VEHICLE_DEFAULTS, ...v }));
+  d.jobs = d.jobs.map((j) => ({ ...JOB_DEFAULTS, ...j, money: j.money ? { ...MONEY_DEFAULTS, ...j.money } : j.money }));
+  d.leadDays ??= [];
+  d.overheads ??= [];
+  return d;
 }
 
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
@@ -103,7 +115,12 @@ class DemoStore implements Store {
       if (q.from && j.pickup_date < q.from) return false;
       if (q.to && j.pickup_date > q.to) return false;
       if (q.driverId && j.driver_id !== q.driverId) return false;
-      if (q.unassigned && j.driver_id !== null) return false;
+      if (q.unassigned && (j.driver_id !== null || j.operator)) return false;
+      if (q.bookedFrom && (!j.booked_on || j.booked_on < q.bookedFrom)) return false;
+      if (q.bookedTo && (!j.booked_on || j.booked_on > q.bookedTo)) return false;
+      if (q.seriesId && j.series_id !== q.seriesId) return false;
+      if (q.unsettled && j.driver_settled_on) return false;
+      if (q.flagged && !j.flag_note) return false;
       if (q.statuses?.length && !q.statuses.includes(j.status)) return false;
       if (q.customerKey && customerKey(j.customer_name, j.customer_phone) !== q.customerKey) return false;
       if (num) return j.job_no === Number(num);
@@ -132,7 +149,8 @@ class DemoStore implements Store {
     // Same rule as public.save_job: collect the charge on the day when that's
     // how they're paying, keep what a driver already collected, else nothing.
     const collectFor = (existing?: Job) =>
-      money?.payment_status === "pay_on_day" ? money.price : existing?.collected_via ? existing.collect_amount : 0;
+      money?.payment_status === "pay_on_day" ? Math.max(money.price - (money.amount_paid ?? 0), 0) : existing?.collected_via ? existing.collect_amount : 0;
+    if (input.children + input.infants > input.passengers) return fail("Children and infants can't be more than the number of people.");
     const link = (jobId: string) => {
       const other = input.linked_job_id ? d.jobs.find((x) => x.id === input.linked_job_id) : undefined;
       if (other && !other.linked_job_id) other.linked_job_id = jobId;
@@ -142,7 +160,9 @@ class DemoStore implements Store {
       if (!j) return fail("That job no longer exists.");
       const wasCompleted = j.status === "completed";
       const collect = collectFor(j);
-      Object.assign(j, input, { collect_amount: collect });
+      // Like public.save_job: these keep their saved value unless they're given.
+      const keep = { booked_on: j.booked_on, flag_note: j.flag_note, series_id: j.series_id };
+      Object.assign(j, keep, input, { collect_amount: collect });
       if (money) j.money = { ...money };
       j.completed_at = j.status === "completed" ? (wasCompleted ? j.completed_at : new Date().toISOString()) : null;
       link(id);
@@ -150,6 +170,8 @@ class DemoStore implements Store {
     }
     const newId = crypto.randomUUID();
     d.jobs.push({
+      ...JOB_DEFAULTS,
+      booked_on: todayIn(d.settings.timezone),
       ...input,
       id: newId,
       job_no: d.nextJobNo++,
@@ -226,6 +248,69 @@ class DemoStore implements Store {
 
   async weeklyTarget(): Promise<number | null> {
     return this.office() ? (data().weeklyTarget ?? null) : null;
+  }
+
+  async settleDriverPay(jobIds: string[], on: string | null): Promise<Result> {
+    if (!this.office()) return fail("You don't have permission to do that.");
+    for (const j of data().jobs) if (jobIds.includes(j.id)) j.driver_settled_on = on;
+    return saved(done);
+  }
+
+  async setFlag(jobId: string, note: string | null): Promise<Result> {
+    if (!this.office()) return fail("You don't have permission to do that.");
+    const j = data().jobs.find((x) => x.id === jobId);
+    if (!j) return fail("That job couldn't be found.");
+    j.flag_note = note;
+    return saved(done);
+  }
+
+  async markPaid(jobIds: string[], on: string, method: PaymentMethod | null): Promise<Result> {
+    if (!this.office()) return fail("You don't have permission to do that.");
+    for (const j of data().jobs) {
+      if (!jobIds.includes(j.id) || !j.money) continue;
+      Object.assign(j.money, { payment_status: "paid", paid_on: on, payment_method: method });
+      if (!j.collected_via) j.collect_amount = 0;
+    }
+    return saved(done);
+  }
+
+  async leads(from: string, to: string): Promise<LeadDay[]> {
+    if (!this.office()) return [];
+    return clone((data().leadDays ?? []).filter((l) => l.day >= from && l.day <= to)).sort((a, b) => a.day.localeCompare(b.day));
+  }
+
+  async saveLeads(l: LeadDay): Promise<Result> {
+    if (!this.office()) return fail("You don't have permission to do that.");
+    const d = data();
+    d.leadDays = [...(d.leadDays ?? []).filter((x) => x.day !== l.day), { ...l }];
+    return saved(done);
+  }
+
+  async overheads(from: string, to: string): Promise<Overhead[]> {
+    if (!this.office()) return [];
+    return clone((data().overheads ?? []).filter((o) => o.month >= from && o.month <= to)).sort(
+      (a, b) => a.month.localeCompare(b.month) || a.category.localeCompare(b.category),
+    );
+  }
+
+  async saveOverhead(id: string | null, o: Omit<Overhead, "id">): Promise<Result> {
+    if (!this.office()) return fail("You don't have permission to do that.");
+    const d = data();
+    d.overheads ??= [];
+    if (id) {
+      const x = d.overheads.find((y) => y.id === id);
+      if (!x) return fail("That cost couldn't be found.");
+      Object.assign(x, o);
+    } else d.overheads.push({ ...o, id: crypto.randomUUID() });
+    return saved(done);
+  }
+
+  async deleteOverhead(id: string): Promise<Result> {
+    if (!this.office()) return fail("You don't have permission to do that.");
+    const d = data();
+    if (!(d.overheads ?? []).some((o) => o.id === id)) return fail("That cost couldn't be found.");
+    d.overheads = (d.overheads ?? []).filter((o) => o.id !== id);
+    return saved(done);
   }
 
   async saveWeeklyTarget(amount: number | null): Promise<Result> {

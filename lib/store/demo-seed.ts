@@ -1,6 +1,7 @@
 import { BILLABLE } from "@/lib/constants";
 import { addDays, minutesOf, timeFromMinutes, weekdayIndex } from "@/lib/dates";
-import type { BookingSource, Job, JobMoney, JobStatus, PaymentMethod, Profile, ServiceType, Settings, TimeOff, Vehicle } from "@/lib/types";
+import type { BookingSource, Job, JobMoney, JobStatus, LeadDay, Overhead, PaymentMethod, Profile, ServiceType, Settings, TimeOff, Vehicle } from "@/lib/types";
+import { JOB_DEFAULTS, MONEY_DEFAULTS, VEHICLE_DEFAULTS } from "./defaults";
 
 // Sample data for demo mode, shaped like Trekway's booking sheet: mostly
 // Waikato and Bay of Plenty towns to and from Auckland airport in a Car or a
@@ -15,8 +16,10 @@ export interface DemoData {
   jobs: Job[];
   timeOff: TimeOff[];
   nextJobNo: number;
-  // Optional, so demo data saved before targets existed still loads.
+  // Optional, so demo data saved before these existed still loads.
   weeklyTarget?: number | null;
+  leadDays?: LeadDay[];
+  overheads?: Overhead[];
 }
 
 function rng(seed: number) {
@@ -39,8 +42,8 @@ export const DEMO_PEOPLE: Profile[] = [
   { user_id: id("d0000001", 5), display_name: "Jack Chen", email: "jack@example.com", phone: "021 555 0105", role: "driver", colour: "#c2410c", pay_rate: null, is_active: true },
 ];
 
-const CAR: Vehicle = { id: id("d0000002", 1), name: "Car", registration: "TRK001", seats: 4, cost_per_km: null, notes: "Toyota Camry hybrid", is_active: true };
-const VAN: Vehicle = { id: id("d0000002", 2), name: "Van", registration: "TRK011", seats: 10, cost_per_km: null, notes: "Toyota Hiace", is_active: true };
+const CAR: Vehicle = { id: id("d0000002", 1), name: "Car", registration: "TRK001", seats: 4, cost_per_km: null, notes: "Toyota Camry hybrid", is_active: true, ...VEHICLE_DEFAULTS };
+const VAN: Vehicle = { id: id("d0000002", 2), name: "Van", registration: "TRK011", seats: 10, cost_per_km: null, notes: "Toyota Hiace", is_active: true, ...VEHICLE_DEFAULTS };
 
 // Where customers live, how long a return run to Auckland airport ties a
 // driver up, and the usual charge for one to two people.
@@ -76,7 +79,7 @@ const round10 = (x: number) => Math.round(x / 10) * 10;
 const phone = (r: () => number) => `02${pick(r, ["1", "2", "7"])}${String(Math.floor(r() * 9_000_000) + 1_000_000)}`;
 const compact = (d: string) => d.replaceAll("-", "");
 
-type Draft = Omit<Job, "id" | "job_no" | "created_at" | "completed_at" | "driver_notes" | "collected_via" | "collect_amount" | "money" | "booking_source"> & {
+type Draft = Omit<Job, "id" | "job_no" | "created_at" | "completed_at" | "driver_notes" | "collected_via" | "collect_amount" | "money" | "booking_source" | keyof typeof JOB_DEFAULTS> & {
   price: number;
   bookedOn: string;
   source: BookingSource;
@@ -146,7 +149,9 @@ export function seedDemo(today: string): DemoData {
 
     const { price, bookedOn, source, ...fields } = x;
     const job: Job = {
+      ...JOB_DEFAULTS,
       ...fields,
+      booked_on: bookedOn,
       id: id("d0000003", jobNo),
       job_no: jobNo++,
       status,
@@ -158,7 +163,7 @@ export function seedDemo(today: string): DemoData {
       driver_notes: status === "completed" && r() < 0.07 ? pick(r, ["Flight 40 min late", "Extra stop in Huntly", "Customer paid by card, receipt given"]) : null,
       created_at: new Date(Date.parse(bookedOn + "T00:00:00Z") + Math.floor(r() * 12 + 7) * 3_600_000).toISOString(),
       completed_at: status === "completed" ? new Date(Date.parse(d + "T00:00:00Z") + (minutesOf(x.pickup_time) + x.duration_min) * 60_000).toISOString() : null,
-      money: { price: status === "no_show" ? round10(price / 2) : price, fuel_cost: 0, tolls_parking: 0, other_cost: 0, payment_status, payment_method, paid_on },
+      money: { ...MONEY_DEFAULTS, price: status === "no_show" ? round10(price / 2) : price, fuel_cost: 0, tolls_parking: 0, other_cost: 0, payment_status, payment_method, paid_on },
     };
     jobs.push(job);
     return job;
@@ -316,7 +321,7 @@ export function seedDemo(today: string): DemoData {
   }
 
   return {
-    settings: { business_name: "Trekway Shuttle", currency: "NZD", timezone: "Pacific/Auckland" },
+    settings: { business_name: "Trekway Shuttle", currency: "NZD", timezone: "Pacific/Auckland", gst_registered: true },
     profiles: DEMO_PEOPLE.map((p) => ({ ...p })),
     vehicles: [CAR, VAN].map((v) => ({ ...v })),
     jobs,

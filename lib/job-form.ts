@@ -5,6 +5,9 @@ import type { JobInput, JobMoney } from "@/lib/types";
 // Reads and checks the job form. Returns the values, or the first problem in
 // words the person can act on. The database re-checks everything.
 
+// The driver list's "Another operator…" choice.
+export const OPERATOR = "operator";
+
 const text = (fd: FormData, name: string) => String(fd.get(name) ?? "").trim();
 const textOrNull = (fd: FormData, name: string, max: number) => text(fd, name).slice(0, max) || null;
 
@@ -40,6 +43,9 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
   const nums = {
     duration_min: number(fd, "duration_min", "Duration", 5, 1440, { int: true }),
     passengers: number(fd, "passengers", "Passengers", 1, 99, { int: true }),
+    children: number(fd, "children", "Children", 0, 99, { int: true }),
+    infants: number(fd, "infants", "Infants", 0, 99, { int: true }),
+    amount_paid: number(fd, "amount_paid", "Paid so far", 0, 1_000_000),
     luggage: number(fd, "luggage", "Bags", 0, 199, { int: true }),
     distance_km: number(fd, "distance_km", "Distance", 0, 5000, { optional: true }),
     price: number(fd, "price", "Charge", 0, 1_000_000),
@@ -58,6 +64,13 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
   const paid_on = text(fd, "paid_on");
   if (paid_on && !isIsoDate(paid_on)) return { error: "The paid date isn't a valid date." };
   if ((N.driver_pay ?? 0) > (N.price ?? 0) && (N.price ?? 0) > 0) return { error: "Driver pay is more than the charge. Check the numbers." };
+  if ((N.children ?? 0) + (N.infants ?? 0) > (N.passengers ?? 1)) return { error: "Children and infants can't be more than the number of people." };
+  if ((N.amount_paid ?? 0) > (N.price ?? 0)) return { error: "Paid so far is more than the charge." };
+
+  // "Another operator" in the driver list: the job goes to an outside company.
+  const driverChoice = text(fd, "driver_id");
+  const operator = driverChoice === OPERATOR ? text(fd, "operator").slice(0, 80) : "";
+  if (driverChoice === OPERATOR && !operator) return { error: "Enter the other operator's name (e.g. Quick Shuttle)." };
 
   const email = text(fd, "customer_email");
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "The customer's email doesn't look right." };
@@ -79,7 +92,10 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
       customer_phone: textOrNull(fd, "customer_phone", 60),
       customer_email: email.slice(0, 120) || null,
       booking_source: booking_source as JobInput["booking_source"],
-      driver_id: text(fd, "driver_id") || null,
+      driver_id: driverChoice && driverChoice !== OPERATOR ? driverChoice : null,
+      operator: operator || null,
+      children: N.children ?? 0,
+      infants: N.infants ?? 0,
       vehicle_id: text(fd, "vehicle_id") || null,
       linked_job_id: text(fd, "linked_job_id") || null,
       is_shared: fd.get("is_shared") === "on",
@@ -96,6 +112,10 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
       // a method and date only mean something once it's paid
       payment_method: payment_status === "paid" ? ((payment_method || null) as JobMoney["payment_method"]) : null,
       paid_on: payment_status === "paid" ? paid_on || null : null,
+      // a deposit only means something until it's paid in full
+      amount_paid: payment_status === "paid" ? 0 : (N.amount_paid ?? 0),
+      invoice_no: textOrNull(fd, "invoice_no", 40),
+      bill_to: textOrNull(fd, "bill_to", 120),
     },
   };
 }
