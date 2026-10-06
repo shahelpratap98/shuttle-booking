@@ -130,8 +130,11 @@ function amountOf(v: unknown): number | null {
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 const FLIGHT = /^[a-z]{2}\s?\d{1,4}[a-z]?$/i; // NZ175, QF 143, NZ0196, DL0065
 const REF_IN = /\b(?:tw|tsm|trek)[-\w]*\d[-\w]*/i; // TW-…, TSM-PS-…, Trek270826-001, inside other text too
-// Outside companies the sheet hands jobs to.
-const OPERATOR_WORDS = /shuttle|maxcare|cars?\b|transport|taxi|limo|coach/i;
+// Outside companies the sheet hands jobs to ("Quick Shuttle", "Maxcare", "Abc Cars").
+// A bare vehicle word ("Car", "Van") is never a company, even if that vehicle isn't set up.
+const OPERATOR_WORDS = /shuttle|maxcare|transport|taxi|limo|coach|\S+ cars?\b/i;
+const VEHICLE_WORD = /^(car|van|wagon|hiace|bus|suv|sedan|prius|camry)s?$/i;
+const isOperator = (s: string) => OPERATOR_WORDS.test(s) && !VEHICLE_WORD.test(s.trim());
 
 // When the booking was taken, from the reference: TW-17072026-0008
 // (ddmmyyyy), TW-20260918-002 (yyyymmdd), TSM-PS-190826-0001 (ddmmyy).
@@ -379,7 +382,7 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       let driver = matchDriver(driverName);
       if (driver === undefined) {
         if (/cancel/i.test(driverName)) { status = "cancelled"; driver = null; }
-        else if (OPERATOR_WORDS.test(driverName)) { operator = driverName.slice(0, 80); driver = null; }
+        else if (isOperator(driverName)) { operator = driverName.slice(0, 80); driver = null; }
         else if (/invoice|account/i.test(driverName)) driver = null; // a payment note in the wrong column
         else if (/^(van|car|wagon|hiace|bus|suv)$/i.test(driverName)) driver = null; // a vehicle in the wrong column; read below
         else if (driverName.split(/\s+/).length > 2) {
@@ -394,7 +397,7 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       // A vehicle written in the Driver column counts when the Vehicle column is empty.
       const vehicleName = text(at(row, "vehicle")) || (/^(van|car|wagon|hiace|bus|suv)$/i.test(driverName) ? driverName : "");
       let vehicle = matchVehicle(vehicleName);
-      if (vehicle === undefined && OPERATOR_WORDS.test(vehicleName) && !driver) {
+      if (vehicle === undefined && isOperator(vehicleName) && !driver) {
         operator = vehicleName.slice(0, 80); // "Quick Shuttle" written in the Vehicle column
         vehicle = null;
       }
