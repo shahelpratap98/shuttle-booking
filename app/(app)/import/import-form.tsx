@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { Spinner } from "@/components/spinner";
 import { useFormAction } from "@/components/use-form-action";
-import { importBookings } from "./actions";
+import { ActionForm } from "@/components/action-form";
+import { addVehicles, importBookings } from "./actions";
 
 export function ImportForm({ currency }: { currency: string }) {
   const { state, pending, onSubmit, formRef } = useFormAction(importBookings);
@@ -45,6 +46,56 @@ export function ImportForm({ currency }: { currency: string }) {
           </ul>
         ) : null}
       </form>
+
+      {state?.mode === "check" && (state.setup?.vehicles.length || state.setup?.drivers.length) ? (
+        <section className="card flex flex-col gap-4 border-warn/40 p-4">
+          <div>
+            <h2 className="font-bold">Set up before importing</h2>
+            <p className="text-sm text-muted">
+              The sheet uses these names, but they aren&rsquo;t in the app yet, so their rows are flagged. Set them up, then press <b>Check the file</b> again.
+            </p>
+          </div>
+
+          {state.setup.vehicles.length ? (
+            <ActionForm action={addVehicles} submitLabel="Add these vehicles" pendingLabel="Adding…" submitClass="btn btn-quiet btn-sm" className="flex flex-col gap-2">
+              <fieldset>
+                <legend className="field-label">Vehicles</legend>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {state.setup.vehicles.map((v) => (
+                    <li key={v.name}>
+                      <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" name="vehicle" value={v.name} defaultChecked={v.jobs >= 2} className="size-4" />
+                        <b>{v.name}</b> <span className="text-muted">({v.jobs} booking{v.jobs === 1 ? "" : "s"})</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+                <p className="field-hint">One-offs like &ldquo;Take Camry&rdquo; can stay unticked; those bookings just come in without a vehicle.</p>
+              </fieldset>
+            </ActionForm>
+          ) : null}
+
+          {state.setup.drivers.length ? (
+            <div className="text-sm">
+              <p className="field-label">Drivers not on the Team page</p>
+              <ul className="flex flex-col gap-1">
+                {state.setup.drivers.map((d) => (
+                  <li key={d.name}>
+                    <b>{d.name}</b>{" "}
+                    <span className="text-muted">
+                      ({d.jobs} booking{d.jobs === 1 ? "" : "s"}{d.upcoming ? `, ${d.upcoming} still to come` : ", all in the past"})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-muted">
+                Anyone still driving: add them on the <Link href="/team" className="link">Team page</Link> with their email, so they can sign in and see their jobs.
+                Anyone who has left can be skipped: their bookings come in as Driver TBC with &ldquo;Driver: name&rdquo; kept in the notes.
+              </p>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {rows.length ? (
         <section className="flex flex-col gap-2">

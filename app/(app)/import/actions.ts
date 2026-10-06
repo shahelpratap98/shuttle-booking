@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { ActionState } from "@/components/action-form";
 import { requireOffice } from "@/lib/auth";
 import { todayIn } from "@/lib/dates";
 import { bookingKey, parseWorkbook, type ParsedBooking } from "@/lib/import-sheet";
@@ -38,6 +39,8 @@ export type ImportState =
       rows?: PreviewRow[];
       skipped?: { sheet: string; row: number; reason: string }[];
       ready?: number;
+      // names in the sheet that aren't set up in the app yet, with how many jobs use them
+      setup?: { drivers: { name: string; jobs: number; upcoming: number }[]; vehicles: { name: string; jobs: number }[] };
       imported?: number;
       failed?: { sheet: string; row: number; error: string }[];
     }
@@ -115,6 +118,31 @@ export async function importBookings(_prev: ImportState, fd: FormData): Promise<
 
   if (mode === "check") {
     const dupCount = rows.length - fresh.length;
+    // What to set up first so the rows aren't flagged: drivers for the Team
+    // page, vehicles for the Vehicles page (busiest first).
+    const drivers = new Map<string, { name: string; jobs: number; upcoming: number }>();
+    const vehicleNames = new Map<string, { name: string; jobs: number }>();
+    for (const b of fresh) {
+      for (const w of b.warnings) {
+        const d = /^Driver "(.+)" isn't on the Team page/.exec(w)?.[1];
+        if (d) {
+          const e = drivers.get(d.toLowerCase()) ?? { name: d, jobs: 0, upcoming: 0 };
+          e.jobs++;
+          if (b.input.pickup_date >= today) e.upcoming++;
+          drivers.set(d.toLowerCase(), e);
+        }
+        const v = /^Vehicle "(.+)" isn't on the Vehicles page/.exec(w)?.[1];
+        if (v) {
+          const e = vehicleNames.get(v.toLowerCase()) ?? { name: v, jobs: 0 };
+          e.jobs++;
+          vehicleNames.set(v.toLowerCase(), e);
+        }
+      }
+    }
+    const setup = {
+      drivers: [...drivers.values()].sort((a, b) => b.upcoming - a.upcoming || b.jobs - a.jobs),
+      vehicles: [...vehicleNames.values()].sort((a, b) => b.jobs - a.jobs),
+    };
     return {
       ok: true,
       mode,
@@ -122,6 +150,7 @@ export async function importBookings(_prev: ImportState, fd: FormData): Promise<
       rows,
       skipped: parsed.skipped,
       ready: fresh.length,
+      setup,
       message:
         `Found ${rows.length} booking${rows.length === 1 ? "" : "s"} on ${parsed.sheets.join(", ")}.` +
         (dupCount ? ` ${dupCount} ${dupCount === 1 ? "is" : "are"} already in the app and will be skipped.` : "") +
@@ -160,5 +189,27 @@ export async function importBookings(_prev: ImportState, fd: FormData): Promise<
     imported,
     failed,
     message: `Imported ${imported} booking${imported === 1 ? "" : "s"}.${failed.length ? ` ${failed.length} couldn't be saved, see below.` : ""}`,
+  };
+}
+
+// From the import check: add the vehicles the sheet names that aren't set up
+// yet ("Wagon", "Hiace"), so their bookings get the right vehicle.
+export async function addVehicles(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { store } = await requireOffice();
+  const names = fd.getAll("vehicle").map((v) => String(v).trim().slice(0, 60)).filter(Boolean);
+  if (!names.length) return { ok: false, message: "Tick the vehicles to add." };
+  const have = new Set((await store.vehicles()).map((v) => v.name.toLowerCase()));
+  const seatsFor = (n: string) => (/van|hiace|bus/i.test(n) ? 10 : /wagon|suv/i.test(n) ? 6 : /car|sedan|camry/i.test(n) ? 4 : null);
+  const added: string[] = [];
+  for (const name of names) {
+    if (have.has(name.toLowerCase())) continue;
+    const res = await store.saveVehicle(null, { name, registration: null, seats: seatsFor(name), cost_per_km: null, notes: null, is_active: true, cof_due: null, rego_due: null, service_due: null });
+    if (!res.ok) return { ok: false, message: `${name}: ${res.error}` };
+    added.push(name);
+  }
+  revalidatePath("/vehicles");
+  return {
+    ok: true,
+    message: added.length ? `Added ${added.join(", ")}. Check seats on the Vehicles page, then press Check the file again.` : "Those vehicles are already set up.",
   };
 }

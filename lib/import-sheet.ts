@@ -380,11 +380,19 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       if (driver === undefined) {
         if (/cancel/i.test(driverName)) { status = "cancelled"; driver = null; }
         else if (OPERATOR_WORDS.test(driverName)) { operator = driverName.slice(0, 80); driver = null; }
-        else if (/invoice/i.test(driverName)) driver = null; // an invoice note in the wrong column
-        else warnings.push(`Driver "${driverName}" isn't on the Team page, so it comes in as TBC`);
+        else if (/invoice|account/i.test(driverName)) driver = null; // a payment note in the wrong column
+        else if (/^(van|car|wagon|hiace|bus|suv)$/i.test(driverName)) driver = null; // a vehicle in the wrong column; read below
+        else if (driverName.split(/\s+/).length > 2) {
+          driver = null; // a note in the wrong column ("Need name display - old couple")
+          notes.push(driverName);
+        } else {
+          warnings.push(`Driver "${driverName}" isn't on the Team page, so it comes in as TBC`);
+          notes.push(`Driver: ${driverName}`); // keep who drove it, even without a login
+        }
       }
 
-      const vehicleName = text(at(row, "vehicle"));
+      // A vehicle written in the Driver column counts when the Vehicle column is empty.
+      const vehicleName = text(at(row, "vehicle")) || (/^(van|car|wagon|hiace|bus|suv)$/i.test(driverName) ? driverName : "");
       let vehicle = matchVehicle(vehicleName);
       if (vehicle === undefined && OPERATOR_WORDS.test(vehicleName) && !driver) {
         operator = vehicleName.slice(0, 80); // "Quick Shuttle" written in the Vehicle column
