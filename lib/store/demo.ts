@@ -335,6 +335,16 @@ class DemoStore implements Store {
     return saved(done);
   }
 
+  async changeEmail(userId: string, email: string): Promise<Result> {
+    if (!this.owner()) return fail("You don't have permission to change the team.");
+    const d = data();
+    const p = d.profiles.find((x) => x.user_id === userId);
+    if (!p) return fail("That person couldn't be found.");
+    if (d.profiles.some((x) => x.user_id !== userId && x.email.toLowerCase() === email)) return fail("Someone else already uses that email.");
+    p.email = email;
+    return saved(done);
+  }
+
   async invitePerson(p: { name: string; email: string; role: Profile["role"]; phone: string | null }): Promise<Result<{ link?: string }>> {
     if (!this.owner()) return fail("You don't have permission to change the team.");
     const d = data();

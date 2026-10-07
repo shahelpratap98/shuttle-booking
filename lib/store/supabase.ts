@@ -341,6 +341,17 @@ class SupabaseStore implements Store {
     return { ok: true, data: { link: this.signInUrl(data.properties.hashed_token, "invite") } };
   }
 
+  async changeEmail(userId: string, email: string): Promise<Result> {
+    const admin = createAdminClient();
+    if (!admin) return fail("Changing an email needs SUPABASE_SERVICE_ROLE_KEY set on the server. See README.md.");
+    // Confirmed straight away, so nothing is emailed and they sign in with the new one.
+    const { error } = await admin.auth.admin.updateUserById(userId, { email, email_confirm: true });
+    if (error) return fail(/already|registered|exists/i.test(error.message) ? "Someone else already uses that email." : error.message);
+    const { error: upd } = await admin.from("profiles").update({ email }).eq("user_id", userId);
+    if (upd) return fail(friendly(upd.message));
+    return done;
+  }
+
   async signInLink(email: string): Promise<Result<{ link: string }>> {
     const admin = createAdminClient();
     if (!admin) return fail("Sign-in links need SUPABASE_SERVICE_ROLE_KEY set on the server. See README.md.");

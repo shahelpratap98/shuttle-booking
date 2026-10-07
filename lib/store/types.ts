@@ -65,6 +65,8 @@ export interface Store {
   savePerson(userId: string, patch: PersonPatch): Promise<Result>;
   invitePerson(p: { name: string; email: string; role: Role; phone: string | null }): Promise<Result<{ link?: string }>>;
   signInLink(email: string): Promise<Result<{ link: string }>>;
+  // Change someone's login email (owner only). Nothing is sent to them.
+  changeEmail(userId: string, email: string): Promise<Result>;
 
   vehicles(): Promise<Vehicle[]>;
   saveVehicle(id: string | null, v: VehicleInput): Promise<Result>;

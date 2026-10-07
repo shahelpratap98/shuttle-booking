@@ -78,10 +78,18 @@ export async function savePerson(_prev: ActionState, fd: FormData): Promise<Acti
   if (userId === viewer.user_id && (role !== "owner" || !active)) {
     return { ok: false, message: "You can't remove your own owner access. Make someone else an owner first, then ask them." };
   }
+  // A new login email, e.g. swapping a placeholder for their real one.
+  const email = text(fd, "email").toLowerCase();
+  const emailChanged = Boolean(email) && email !== text(fd, "old_email").toLowerCase();
+  if (emailChanged) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Enter a valid email address." };
+    const changed = await store.changeEmail(userId, email);
+    if (!changed.ok) return { ok: false, message: changed.error };
+  }
   const res = await store.savePerson(userId, { display_name: name, phone: text(fd, "phone").slice(0, 40) || null, role, colour, pay_rate: rate, is_active: active });
   if (!res.ok) return { ok: false, message: res.error };
   revalidatePath("/", "layout");
-  return { ok: true, message: "Saved." };
+  return { ok: true, message: emailChanged ? `Saved. They now sign in with ${email}.` : "Saved." };
 }
 
 // ------------------------------------------------------------------ vehicles

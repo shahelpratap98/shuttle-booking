@@ -47,7 +47,10 @@ export default async function TeamPage() {
             </div>
             <div>
               <label htmlFor="new-email" className="field-label">Email (their login)</label>
-              <input id="new-email" name="email" type="email" required className="field" />
+              <input id="new-email" name="email" type="email" required className="field" aria-describedby="new-email-hint" />
+              <p id="new-email-hint" className="field-hint">
+                No email for them yet? Use a placeholder like name@trekwayshuttle.co.nz and change it on their card later. Nothing is sent to it.
+              </p>
             </div>
             <div>
               <label htmlFor="new-phone" className="field-label">Mobile</label>
@@ -97,6 +100,12 @@ function PersonCard({ p, self, currency, live }: { p: Profile; self: boolean; cu
             <label htmlFor={`pr-${p.user_id}`} className="field-label">Pay per hour ({currency})</label>
             <input id={`pr-${p.user_id}`} name="pay_rate" inputMode="decimal" defaultValue={p.pay_rate ?? ""} className="field" placeholder="For cost suggestions" />
           </div>
+        </div>
+        <div>
+          <label htmlFor={`e-${p.user_id}`} className="field-label">Email (their login)</label>
+          <input type="hidden" name="old_email" value={p.email} />
+          <input id={`e-${p.user_id}`} name="email" type="email" defaultValue={p.email} required className="field sm:max-w-md" />
+          <p className="field-hint">Change it to give them a new login email. Nothing is sent; they sign in with the new one.</p>
         </div>
         <fieldset>
           <legend className="field-label">Calendar colour</legend>
