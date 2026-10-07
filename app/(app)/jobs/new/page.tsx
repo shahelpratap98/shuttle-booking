@@ -63,6 +63,7 @@ export default async function NewJobPage({ searchParams }: { searchParams: Promi
         shareName={shareLabel(lists.settings.business_name)}
         today={lists.today}
         totals={lists.totals}
+        salesThisWeek={lists.salesThisWeek}
         weeklyTarget={lists.weeklyTarget}
       />
     </>

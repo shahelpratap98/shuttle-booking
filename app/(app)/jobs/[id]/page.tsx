@@ -14,7 +14,7 @@ import { isOffice, requireViewer } from "@/lib/auth";
 import { jobWarnings } from "@/lib/clashes";
 import { BILLABLE, METHOD_LABEL, SERVICE_LABEL, SOURCE_LABEL, STATUS_LABEL } from "@/lib/constants";
 import { customerKey } from "@/lib/customers";
-import { endOfMonth, fmtDate, fmtDay, fmtDuration, fmtLong, fmtMonth, fmtTime, minutesOf, startOfMonth, timeFromMinutes, todayIn, weekdayIndex, WEEKDAYS } from "@/lib/dates";
+import { addDays, endOfMonth, fmtDate, fmtDay, fmtDuration, fmtLong, fmtMonth, fmtShort, fmtTime, minutesOf, startOfMonth, startOfWeek, timeFromMinutes, todayIn, weekdayIndex, WEEKDAYS } from "@/lib/dates";
 import { bookingRef, businessPay, charge, expenses, gstOf, jobRef, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
 import { jobCardText } from "@/lib/job-card";
 
@@ -37,7 +37,8 @@ export default async function JobPage({
 
   const office = isOffice(viewer.role);
   const saved = typeof q.saved === "string" ? SAVED[q.saved] : undefined;
-  const [settings, people, vehicles, sameDay, timeOff, linked, repeats, monthJobs] = await Promise.all([
+  const salesWeek = job.booked_on ? startOfWeek(job.booked_on) : null;
+  const [settings, people, vehicles, sameDay, timeOff, linked, repeats, monthJobs, weekSales] = await Promise.all([
     store.settings(),
     store.people(),
     store.vehicles(),
@@ -47,6 +48,8 @@ export default async function JobPage({
     store.repeatCounts([job.id]),
     // After a save: the month's new total, for the banner.
     saved && office ? store.jobs({ from: startOfMonth(job.pickup_date), to: endOfMonth(job.pickup_date), statuses: BILLABLE }) : Promise.resolve([]),
+    // ...and the sales taken in the week it was booked, whatever the trip date.
+    saved === SAVED.created && office && salesWeek ? store.jobs({ bookedFrom: salesWeek, bookedTo: addDays(salesWeek, 6), statuses: BILLABLE }) : Promise.resolve([]),
   ]);
   const earlier = repeats[job.id] ?? 0;
   const series = office && job.series_id ? await store.jobs({ seriesId: job.series_id }) : [];
@@ -101,7 +104,11 @@ export default async function JobPage({
           {monthJobs.length ? (
             <span className="font-normal">
               {" "}{fmtMonth(job.pickup_date)} is now {monthJobs.length} booking{monthJobs.length === 1 ? "" : "s"},{" "}
-              {money(monthJobs.reduce((sum, o) => sum + charge(o), 0), cur, { cents: false })} booked. <Link href={`/totals?year=${job.pickup_date.slice(0, 4)}`} className="underline">Totals</Link>
+              {money(monthJobs.reduce((sum, o) => sum + charge(o), 0), cur, { cents: false })} booked.
+              {weekSales.length && salesWeek ? (
+                <> Sales for the week ending {fmtShort(addDays(salesWeek, 6))}: {money(weekSales.reduce((sum, o) => sum + charge(o), 0), cur, { cents: false })}.</>
+              ) : null}{" "}
+              <Link href={`/totals?year=${job.pickup_date.slice(0, 4)}`} className="underline">Totals</Link>
             </span>
           ) : null}
         </p>

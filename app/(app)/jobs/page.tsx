@@ -9,7 +9,7 @@ import { FilterSubmit } from "@/components/pending-buttons";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
 import { requireOffice } from "@/lib/auth";
 import { BILLABLE, NO_DRIVER, SERVICE_LABEL, SERVICES, STATUS_LABEL, STATUSES } from "@/lib/constants";
-import { addDays, fmtDay, fmtLong, fmtTime, isIsoDate, todayIn } from "@/lib/dates";
+import { addDays, fmtDay, fmtLong, fmtShort, fmtTime, isIsoDate, startOfWeek, todayIn } from "@/lib/dates";
 import { bookingRef, businessPay, charge, money, shareLabel } from "@/lib/format";
 import type { Job, JobQuery, JobStatus, ServiceType } from "@/lib/types";
 
@@ -48,11 +48,15 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const status = STATUSES.includes(s("status") as JobStatus) ? (s("status") as JobStatus) : "";
   const service = SERVICES.includes(s("service") as ServiceType) ? (s("service") as ServiceType) : "";
   const search = s("q").slice(0, 80);
+  // Driver TBC, one week at a time: on Sunday the office hands out next week's jobs.
+  const week = view === "available" && (s("week") === "this" || s("week") === "next") ? s("week") : "";
+  const nextMonday = addDays(startOfWeek(today), 7);
+  const weekRange = week === "this" ? { from: today, to: addDays(nextMonday, -1) } : week === "next" ? { from: nextMonday, to: addDays(nextMonday, 6) } : null;
 
   const query: JobQuery = { search: search || undefined };
   switch (view) {
     case "available":
-      Object.assign(query, { from: today, unassigned: true, statuses: ["confirmed", "enquiry"] });
+      Object.assign(query, { from: today, unassigned: true, statuses: ["confirmed", "enquiry"], ...weekRange });
       break;
     case "day":
       Object.assign(query, { from: day, to: day });
@@ -177,6 +181,21 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         ))}
       </nav>
 
+      {view === "available" ? (
+        <nav aria-label="Which week" className="mb-4 flex flex-wrap items-center gap-1.5 print:hidden">
+          {([["", "All upcoming"], ["this", "This week"], ["next", `Next week (from ${fmtShort(nextMonday)})`]] as const).map(([w, label]) => (
+            <Link
+              key={w || "all"}
+              href={w ? `/jobs?view=available&week=${w}` : "/jobs?view=available"}
+              aria-current={w === week ? "page" : undefined}
+              className={`btn btn-sm ${w === week ? "btn-primary" : "btn-quiet"}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+
       {view === "day" ? (
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 print:hidden">
           <div className="flex items-center gap-1.5">
@@ -198,6 +217,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
       <form className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end print:hidden" role="search">
         <input type="hidden" name="view" value={view} />
+        {week ? <input type="hidden" name="week" value={week} /> : null}
         {customer ? <input type="hidden" name="customer" value={customer} /> : null}
         {view === "day" ? <input type="hidden" name="date" value={day} /> : null}
         <div className="col-span-2 sm:w-64">

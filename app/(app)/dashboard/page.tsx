@@ -41,9 +41,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     store.vehicles(),
     store.weeklyTarget(),
   ]);
-  const [flagged, unpaidDrivers] = await Promise.all([
+  const [flagged, unpaidDrivers, sold] = await Promise.all([
     store.jobs({ flagged: true }), // a flag stays until someone clears it, however old the trip
     store.jobs({ unsettled: true, to: today, statuses: ["completed", "no_show"] }),
+    // Sales: bookings taken in the trend weeks, whatever the trip date.
+    store.jobs({ bookedFrom: trendStart, bookedTo: addDays(startOfWeek(period.to), 6), statuses: BILLABLE }),
   ]);
   const vehicleDue = vehicleAlerts(vehicles, today);
   const driverOwed = unpaidDrivers.reduce((s, j) => s + j.driver_pay - (j.collected_via === "cash" ? j.collect_amount : 0), 0);
@@ -55,6 +57,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const before = summarise(inRange(period.prevFrom, period.prevTo));
 
   const weeks = weekly(jobs, trendStart, TREND_WEEKS);
+  const salesBy = new Map<string, number>();
+  for (const j of sold) if (j.booked_on) salesBy.set(startOfWeek(j.booked_on), (salesBy.get(startOfWeek(j.booked_on)) ?? 0) + charge(j));
   const weekLabels = weeks.map((w) => fmtShort(w.start));
   const months = monthly(jobs, monthStart, MONTHS_BACK + 1 + MONTHS_AHEAD);
   const monthLabel = (d: string) => new Intl.DateTimeFormat("en-NZ", { month: "short", year: "2-digit", timeZone: "UTC" }).format(new Date(d + "T00:00:00Z"));
@@ -271,17 +275,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="min-w-0 lg:col-span-2">
           <Card
         title="Week by week"
-        sub={`Number of bookings and total booking $ each week, newest first${target ? `. Weekly target ${m(target)}` : ""}`}
+        sub={`Trips each week by pick-up date, newest first. Sales = what was booked that week, whatever the trip date${target ? `. Weekly target ${m(target)}` : ""}`}
         action={<Link href="/totals" className="link text-sm">Every week and month</Link>}
       >
             <div className="-mx-4 overflow-x-auto px-4">
-              <table className="w-full min-w-[560px] text-sm tabular">
+              <table className="w-full min-w-[640px] text-sm tabular">
                 <thead>
                   <tr className="border-b border-line">
                     <th className="th px-2">Week starting</th>
                     <th className="th px-2 text-right">Bookings</th>
                     <th className="th px-2 text-right">Total booking $</th>
                     {target ? <th className="th px-2 text-right">vs target</th> : null}
+                    <th className="th px-2 text-right">Sales that week</th>
                     <th className="th px-2 text-right">Driver pay</th>
                     <th className="th px-2 text-right">{share}</th>
                     <th className="th px-2 text-right">Cancelled / no-show</th>
@@ -296,6 +301,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                       <td className="px-2 py-1.5 text-right">{num(w.bookings)}</td>
                       <td className="px-2 py-1.5 text-right">{m(w.charges)}</td>
                       {target ? <td className="px-2 py-1.5 text-right"><TargetBar value={w.charges} target={target} /></td> : null}
+                      <td className="px-2 py-1.5 text-right">{salesBy.get(w.start) ? m(salesBy.get(w.start)!) : <span className="text-muted">–</span>}</td>
                       <td className="px-2 py-1.5 text-right">{m(w.driverPay)}</td>
                       <td className="px-2 py-1.5 text-right">{m(w.businessPay)}</td>
                       <td className="px-2 py-1.5 text-right text-muted">{num(w.lost)}</td>

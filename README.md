@@ -58,8 +58,9 @@ Driver Pay | More Info | Flight Information | Booking Reference).
 |---|---|
 | Monthly tabs Aug-2025 → Jul-2027 (all three layouts) | Bookings → Import. Older tabs without Driver / Driver Pay columns, the driver named under More Info, "Online Payment", "On account", "Invoice # INV-0092", "Customer Paid Direct", tours dated "06 to 13", costs typed as negative rows, "500 to Quick Shuttle", "Trekway to pay $280" are all read |
 | `Q1 =SUM(K:K)` month totals; Driver tab Month list | Totals: month by month, year total |
-| Driver tab "New booking for month" | Totals → Each month in detail → Taken this month (from the booked-on day; imports read it from TW-ddmmyyyy / TW-yyyymmdd / TSM-…-ddmmyy references) |
-| Driver tab "Week Ending" amounts | Totals → Week by week (Mon – Sun, with the week-ending date) |
+| Driver tab "New booking for month" / "total before the month" | Totals → Each month in detail → Booked before the month / Booked during the month / Sales this month (from the booked-on day; imports read it from TW-ddmmyyyy / TW-yyyymmdd / TSM-…-ddmmyy references) |
+| Driver tab "Week Ending" sales | Totals → Sales week by week; dashboard week table "Sales that week"; new-booking form "Sales this week" |
+| Sunday: hand next week's jobs to drivers | Bookings → Driver TBC → Next week |
 | "Paid Shef" beside rows | Driver pay: pay runs per driver, less cash they hold; imported "Paid Shef" rows come in as paid out |
 | Summary earning (per driver Earning / Driver Pay / Trekway) | Dashboard → Drivers and vehicles |
 | More Info invoice numbers, "On account", "Charge Hotel", tours "Paid 3000" | Booking form: Invoice #, Bill to, Paid so far; Invoices page |

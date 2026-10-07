@@ -138,7 +138,10 @@ export default async function GuidePage() {
                 <li><b>Invoices</b>: money still owed for trips (invoiced, on account, part-paid), oldest first, grouped by invoice or customer. <b>Mark all paid</b> when it arrives.</li>
                 <li><b>Costs</b>: running costs each month (Google and Facebook ads, staff, fuel cards…) and what&rsquo;s left after them. <b>Copy last month&rsquo;s costs</b> saves typing. The <b>run calculator</b> works out what a contract or daily shuttle brings in.</li>
                 <li><b>Leads</b>: how many enquiries came in each day, and how many bookings were taken, so you can see how many turn into bookings.</li>
-                <li><b>Totals → Each month in detail</b>: bookings taken that month, GST, running costs and what&rsquo;s left. <b>How each month was paid</b> splits it by online, cash, card, bank and invoice.</li>
+                <li><b>Totals → Each month in detail</b>: the month&rsquo;s trips split into what was already booked before the month started and what was booked during it, sales taken that month (any trip date), GST, running costs and what&rsquo;s left.</li>
+                <li><b>Totals → Sales week by week</b>: what was booked each week, whatever the trip date (the old &ldquo;Week Ending&rdquo; table). The dashboard week table and the new-booking form show it too: &ldquo;Sales this week&rdquo; goes up as you enter a booking.</li>
+                <li><b>Bookings → Driver TBC → Next week</b>: on Sunday, open next week&rsquo;s jobs with no driver and assign them one by one.</li>
+                <li><b>Totals → How each month was paid</b> splits it by online, cash, card, bank and invoice.</li>
               </ul>
 
               <h3>Spreadsheets</h3>

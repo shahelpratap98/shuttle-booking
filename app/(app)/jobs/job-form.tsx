@@ -13,7 +13,7 @@ import { fmtDate, fmtMonth, fmtShort, startOfWeek } from "@/lib/dates";
 import type { Customer } from "@/lib/store/types";
 import type { Job, JobStatus, PaymentStatus, Profile, Vehicle } from "@/lib/types";
 import { OPERATOR } from "@/lib/job-form";
-import type { BookedSoFar } from "./form-data";
+import type { BookedSoFar, SalesThisWeek } from "./form-data";
 
 type Defaults = Partial<Job> & { money?: Job["money"] };
 
@@ -39,6 +39,7 @@ export function JobForm({
   today,
   totals,
   weeklyTarget,
+  salesThisWeek,
 }: {
   job?: Job; // editing
   defaults: Defaults;
@@ -51,6 +52,7 @@ export function JobForm({
   today: string;
   totals: BookedSoFar; // what's booked so far per month and week
   weeklyTarget: number | null;
+  salesThisWeek?: SalesThisWeek; // new bookings only: sales taken since Monday
 }) {
   const { state, pending, onSubmit, formRef } = useFormAction(saveJob);
   const d = defaults;
@@ -284,6 +286,13 @@ export function JobForm({
                 )}
                 {!counts ? " (enquiries and cancelled bookings don't count)" : ""}
               </p>
+              {salesThisWeek && !job ? (
+                <p className="mt-1">
+                  Sales this week (booked since {fmtShort(salesThisWeek.start)}): {whole(salesThisWeek.total)}
+                  {counts ? <> &rarr; <b>{whole(salesThisWeek.total + charged)}</b> with this one</> : null}
+                  {weeklyTarget ? <span className="text-muted"> of {whole(weeklyTarget)} target</span> : null}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

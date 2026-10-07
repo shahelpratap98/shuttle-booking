@@ -8,18 +8,23 @@ import type { Store } from "@/lib/store";
 // the Monday): number of bookings and total booking $.
 export type BookedSoFar = Record<string, { bookings: number; total: number }>;
 
+// Sales this week: bookings taken since Monday, whatever the trip date.
+export type SalesThisWeek = { start: string; bookings: number; total: number };
+
 // Pick-lists for the job form: people, vehicles, past customers and places,
 // plus the month and week totals the form shows as a booking is entered.
 export async function jobFormLists(store: Store) {
   const settings = await store.settings();
   const today = todayIn(settings.timezone);
-  const [people, vehicles, customers, recent, booked, weeklyTarget] = await Promise.all([
+  const thisWeek = startOfWeek(today);
+  const [people, vehicles, customers, recent, booked, weeklyTarget, soldThisWeek] = await Promise.all([
     store.people(),
     store.vehicles(),
     store.recentCustomers(),
     store.jobs({ from: addDays(today, -120), order: "desc", limit: 1500 }),
     store.jobs({ from: addDays(today, -400), statuses: BILLABLE }),
     store.weeklyTarget(),
+    store.jobs({ bookedFrom: thisWeek, bookedTo: addDays(thisWeek, 6), statuses: BILLABLE }),
   ]);
   // Most-used addresses first.
   const counts = new Map<string, number>();
@@ -34,5 +39,6 @@ export async function jobFormLists(store: Store) {
       t.total += charge(j);
     }
   }
-  return { settings, today, people, vehicles, customers, places, totals, weeklyTarget };
+  const salesThisWeek: SalesThisWeek = { start: thisWeek, bookings: soldThisWeek.length, total: soldThisWeek.reduce((s, j) => s + charge(j), 0) };
+  return { settings, today, people, vehicles, customers, places, totals, weeklyTarget, salesThisWeek };
 }
