@@ -35,7 +35,7 @@ export function PersonDot({ colour, className = "size-2.5" }: { colour: string; 
 export function RepeatChip({ earlier, long = false }: { earlier: number | undefined; long?: boolean }) {
   if (!earlier) return null;
   return (
-    <span className="chip bg-accent/15 text-accent-text" title={repeatLabel(earlier)}>
+    <span className="chip bg-tint-2 text-accent-text" title={repeatLabel(earlier)}>
       ★ {long ? repeatLabel(earlier) : "Repeat"}
     </span>
   );

@@ -87,5 +87,5 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // everything except Next's own files, the icons and the app manifest
   // (phones fetch these before anyone signs in)
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|icon-192.png|icon-512.png|apple-icon|manifest.webmanifest).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|trekway-logo.png|icon-192.png|icon-512.png|apple-icon|manifest.webmanifest).*)"],
 };

@@ -47,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       {store.mode === "demo" ? (
-        <p className="bg-accent px-4 py-1.5 text-center text-[13px] font-semibold text-[#1b1300] print:hidden">
+        <p className="bg-accent px-4 py-1.5 text-center text-[13px] font-semibold text-on-accent print:hidden">
           Demo mode: sample data, reset whenever the server restarts. Connect Supabase to go live (see README).
         </p>
       ) : null}
@@ -55,7 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2.5 sm:justify-start sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.svg" alt="" width={28} height={28} className="size-7" />
+            <img src="/trekway-logo.png" alt="" width={36} height={36} className="size-9 rounded-full bg-white p-0.5" />
             <span className="text-[15px] font-bold tracking-tight">{settings.business_name}</span>
           </Link>
           <div className="hidden sm:contents">

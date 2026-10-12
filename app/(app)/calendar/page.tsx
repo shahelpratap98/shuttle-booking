@@ -200,7 +200,7 @@ function Agenda({
         <section key={d} aria-label={fmtDay(d)}>
           <h2 className={`mb-1.5 flex items-center gap-2 text-sm font-bold uppercase ${d === today ? "text-accent-text" : "text-muted"}`}>
             {fmtDay(d)}
-            {d === today ? <span className="rounded bg-accent px-1.5 text-[11px] text-[#1b1300]">TODAY</span> : null}
+            {d === today ? <span className="rounded bg-accent px-1.5 text-[11px] text-on-accent">TODAY</span> : null}
             {office ? <Link href={`/jobs/new?date=${d}`} className="ml-auto rounded-md px-2 py-1 text-xs normal-case text-muted hover:bg-surface-2">+ Add</Link> : null}
           </h2>
           {list.length === 0 && offs.length === 0 ? (
@@ -378,7 +378,7 @@ function MonthGrid({
               <div className="mb-1 flex items-center justify-between">
                 <Link
                   href={dayHref(d)}
-                  className={`inline-grid size-6 place-items-center rounded-full text-xs font-semibold ${d === today ? "bg-accent text-[#1b1300]" : inMonth ? "text-text hover:bg-surface-2" : "text-muted"}`}
+                  className={`inline-grid size-6 place-items-center rounded-full text-xs font-semibold ${d === today ? "bg-accent text-on-accent" : inMonth ? "text-text hover:bg-surface-2" : "text-muted"}`}
                 >
                   {Number(d.slice(8))}
                 </Link>

@@ -27,7 +27,7 @@ export function NavLinks({ links }: { links: NavItem[] }) {
           >
             {link.label}
             <LinkPending />
-            {link.badge ? <span className="rounded-full bg-accent px-1.5 py-0.5 text-xs text-[#1b1300]">{link.badge}</span> : null}
+            {link.badge ? <span className="rounded-full bg-accent px-1.5 py-0.5 text-xs text-on-accent">{link.badge}</span> : null}
           </Link>
         );
       })}
@@ -67,7 +67,7 @@ export function MobileNav({
       >
         <span className={`h-1 w-8 rounded-full ${active ? "bg-accent" : "bg-transparent"}`} aria-hidden="true" />
         <span className="truncate">{link.short ?? link.label}</span>
-        {link.badge ? <span className="absolute top-1.5 right-[18%] rounded-full bg-accent px-1.5 text-[10px] text-[#1b1300]">{link.badge}</span> : null}
+        {link.badge ? <span className="absolute top-1.5 right-[18%] rounded-full bg-accent px-1.5 text-[10px] text-on-accent">{link.badge}</span> : null}
         <span className="absolute top-1 right-1"><LinkPending className="size-3" /></span>
       </Link>
     );
@@ -94,7 +94,7 @@ export function MobileNav({
                 <li key={l.href}>
                   <Link href={l.href} className={`flex min-h-12 items-center justify-between px-2 text-[15px] font-semibold ${isActive(pathname, l.href) ? "text-accent-text" : "text-text"}`}>
                     <span className="inline-flex items-center gap-2">{l.label} <LinkPending /></span>
-                    {l.badge ? <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-[#1b1300]">{l.badge}</span> : null}
+                    {l.badge ? <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-on-accent">{l.badge}</span> : null}
                   </Link>
                 </li>
               ))}
@@ -121,7 +121,7 @@ export function MobileNav({
         >
           <span className={`h-1 w-8 rounded-full ${moreActive && !open ? "bg-accent" : "bg-transparent"}`} aria-hidden="true" />
           <span>{open ? "Close" : "More"}</span>
-          {moreBadge ? <span className="absolute top-1.5 right-[18%] rounded-full bg-accent px-1.5 text-[10px] text-[#1b1300]">{moreBadge}</span> : null}
+          {moreBadge ? <span className="absolute top-1.5 right-[18%] rounded-full bg-accent px-1.5 text-[10px] text-on-accent">{moreBadge}</span> : null}
         </button>
       </nav>
     </div>

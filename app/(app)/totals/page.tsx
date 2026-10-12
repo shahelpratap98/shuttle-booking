@@ -217,7 +217,7 @@ export default async function TotalsPage({ searchParams }: { searchParams: Promi
                 const lead = leadsBy.get(k) ?? 0;
                 const left = r.businessPay - (expensesBy.get(k) ?? 0) - cost;
                 return (
-                  <tr key={k} className={k === thisMonth ? "bg-accent/10 font-semibold" : ""}>
+                  <tr key={k} className={k === thisMonth ? "bg-tint font-semibold" : ""}>
                     <td className="px-2 py-1.5 whitespace-nowrap">{monthName(r.start)}</td>
                     <td className="px-2 py-1.5 text-right">{sp.beforeN ? <>{m(sp.before)} <span className="text-xs text-muted">({sp.beforeN})</span></> : <span className="text-muted">–</span>}</td>
                     <td className="px-2 py-1.5 text-right">{sp.duringN ? <>{m(sp.during)} <span className="text-xs text-muted">({sp.duringN})</span></> : <span className="text-muted">–</span>}</td>
@@ -268,7 +268,7 @@ export default async function TotalsPage({ searchParams }: { searchParams: Promi
                 const k = r.start.slice(0, 7);
                 const p = paidBy.get(k)!;
                 return (
-                  <tr key={k} className={k === thisMonth ? "bg-accent/10 font-semibold" : ""}>
+                  <tr key={k} className={k === thisMonth ? "bg-tint font-semibold" : ""}>
                     <td className="px-2 py-1.5 whitespace-nowrap">{monthName(r.start)}</td>
                     {PAID_WAYS.map((w) => (
                       <td key={w} className={`px-2 py-1.5 text-right ${w === "not paid" && p[w] && k < thisMonth ? "text-bad" : ""}`}>
@@ -304,7 +304,7 @@ export default async function TotalsPage({ searchParams }: { searchParams: Promi
                 {salesWeeks.map((w) => {
                   const t = salesBy.get(w)!;
                   return (
-                    <tr key={w} className={w === thisWeek ? "bg-accent/10 font-semibold" : ""}>
+                    <tr key={w} className={w === thisWeek ? "bg-tint font-semibold" : ""}>
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         Sun {fmtShort(addDays(w, 6))}
                         {w === thisWeek ? <span className="ml-1 text-xs font-normal text-muted">this week</span> : null}
@@ -388,7 +388,7 @@ function TotalsTable({
         </thead>
         <tbody className="divide-y divide-line">
           {rows.map(({ key, label, row, now }) => (
-            <tr key={key} className={now ? "bg-accent/10 font-semibold" : ""}>
+            <tr key={key} className={now ? "bg-tint font-semibold" : ""}>
               <td className="px-2 py-1.5 whitespace-nowrap">{label}</td>
               <td className="px-2 py-1.5 text-right">{num(row.bookings)}</td>
               <td className="px-2 py-1.5 text-right">{m(row.charges)}</td>

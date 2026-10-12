@@ -140,7 +140,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </nav>
 
       {/* this week's sales: everything booked since Monday, whatever the trip date */}
-      <section aria-label="Sales this week" className="card mb-4 flex flex-col gap-3 border-accent/50 p-4 sm:flex-row sm:items-center sm:gap-6">
+      <section aria-label="Sales this week" className="card mb-4 flex flex-col gap-3 border-tint-2 p-4 sm:flex-row sm:items-center sm:gap-6">
         <div>
           <p className="text-sm font-semibold text-muted">Sales this week <span className="font-normal">(booked {fmtShort(thisWeek)} – {fmtShort(addDays(thisWeek, 6))}, any trip date)</span></p>
           <p className="text-3xl font-bold tabular">{m(salesNowTotal)}</p>
@@ -258,7 +258,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </thead>
                 <tbody className="divide-y divide-line">
                   {months.map((r) => (
-                    <tr key={r.start} className={r.start.slice(0, 7) === thisMonth ? "bg-accent/10 font-semibold" : ""}>
+                    <tr key={r.start} className={r.start.slice(0, 7) === thisMonth ? "bg-tint font-semibold" : ""}>
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         {monthLabel(r.start)}
                         {r.start.slice(0, 7) > thisMonth ? <span className="ml-1 text-xs font-normal text-muted">so far</span> : null}
@@ -314,7 +314,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </thead>
                 <tbody className="divide-y divide-line">
                   {[...weeks].reverse().map((w) => (
-                    <tr key={w.start} className={w.start === startOfWeek(today) ? "bg-accent/10 font-semibold" : ""}>
+                    <tr key={w.start} className={w.start === startOfWeek(today) ? "bg-tint font-semibold" : ""}>
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         <Link href={`/calendar?view=week&date=${w.start}`} className="hover:underline">{fmtDay(w.start)}</Link>
                       </td>

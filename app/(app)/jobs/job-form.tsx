@@ -180,7 +180,7 @@ export function JobForm({
               <input id="customer_name" name="customer_name" required maxLength={120} list="customers" value={name} onChange={(e) => onCustomer(e.target.value)} className="field" autoComplete="off" />
               <datalist id="customers">{[...new Set(customers.map((c) => c.name))].map((n) => <option key={n} value={n} />)}</datalist>
               {known && earlier > 0 ? (
-                <p className="mt-1.5 rounded-lg bg-accent/15 px-2.5 py-1.5 text-sm font-semibold text-accent-text" aria-live="polite">
+                <p className="mt-1.5 rounded-lg bg-tint-2 px-2.5 py-1.5 text-sm font-semibold text-accent-text" aria-live="polite">
                   ★ Repeat customer: {earlier} earlier booking{earlier === 1 ? "" : "s"}
                   {known.last ? <span className="font-normal">, latest {fmtDate(known.last)}</span> : null}
                 </p>

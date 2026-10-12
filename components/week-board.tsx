@@ -83,7 +83,7 @@ export function WeekBoard({
             {days.map((d) => (
               <th key={d} scope="col" className={`px-2 py-2 text-left text-xs font-semibold ${d === today ? "text-accent-text" : "text-muted"}`}>
                 <Link href={dayHref(d)} className="hover:underline">{fmtDay(d)}</Link>
-                {d === today ? <span className="ml-1 rounded bg-accent px-1 text-[10px] text-[#1b1300]">TODAY</span> : null}
+                {d === today ? <span className="ml-1 rounded bg-accent px-1 text-[10px] text-on-accent">TODAY</span> : null}
               </th>
             ))}
           </tr>
@@ -104,7 +104,7 @@ export function WeekBoard({
                 const cell = jobs.filter((j) => j.driver_id === r.id && j.pickup_date === d).sort(byTime);
                 const offToday = r.id ? off.find((t) => isOff(t, r.id!, d)) : undefined;
                 return (
-                  <td key={d} className={`group border-l border-line px-1.5 py-1.5 ${d === today ? "bg-accent/5" : ""}`}>
+                  <td key={d} className={`group border-l border-line px-1.5 py-1.5 ${d === today ? "bg-tint/60" : ""}`}>
                     <div className="flex flex-col gap-1">
                       {offToday ? <OffBlock t={offToday} /> : null}
                       {cell.map((j) => (

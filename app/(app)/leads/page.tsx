@@ -65,7 +65,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               {days.map((d) => {
                 const l = byDay.get(d);
                 return (
-                  <tr key={d} className={d === today ? "bg-accent/10 font-semibold" : ""}>
+                  <tr key={d} className={d === today ? "bg-tint font-semibold" : ""}>
                     <td className="td whitespace-nowrap">{fmtDay(d)}</td>
                     <td className="td text-right">{l ? num(l.leads) : <span className="text-muted">–</span>}</td>
                     <td className="td text-right text-muted">{l?.local ?? ""}</td>

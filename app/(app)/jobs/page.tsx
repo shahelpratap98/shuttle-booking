@@ -177,7 +177,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </p>
       ) : null}
       {customer ? (
-        <p className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent/15 px-3 py-2 text-sm text-accent-text">
+        <p className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-tint-2 px-3 py-2 text-sm text-accent-text">
           <b>★ One customer&rsquo;s bookings</b>
           {jobs[0] ? <span>({jobs[0].customer_name}{jobs[0].customer_phone ? `, ${jobs[0].customer_phone}` : ""})</span> : null}
           <Link href={`/jobs?view=${view}`} className="ml-auto font-semibold underline">Show everyone</Link>

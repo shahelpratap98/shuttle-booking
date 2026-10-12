@@ -7,8 +7,8 @@ export function AuthCard({ title, intro, children, footer }: { title: string; in
       <div className="w-full max-w-[440px]">
         <div className="flex items-center gap-2.5 text-white">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon.svg" alt="" width={36} height={36} className="size-9" />
-          <span className="text-lg font-bold tracking-tight">Shuttle bookings</span>
+          <img src="/trekway-logo.png" alt="" width={48} height={48} className="size-12 rounded-full bg-white p-1" />
+          <span className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight">Trekway Shuttle</span>
         </div>
         <div className="mt-4 rounded-2xl bg-surface p-7 shadow-xl sm:p-8">
           <h1 className="text-2xl font-bold">{title}</h1>
