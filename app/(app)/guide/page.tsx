@@ -80,7 +80,7 @@ export default async function GuidePage() {
                 new booking with the same details. Tick <b>Shared ride</b> when several bookings go in one vehicle, so they aren&rsquo;t flagged as a clash.
               </Tip>
               <ul className="list-disc pl-5">
-                <li><b>Children and infants</b>: put how many of the people are children or babies; infants remind you to fit a baby seat.</li>
+                <li><b>Booking date and Trip date</b>: the booking date is the day it was booked (today, unless you&rsquo;re entering an older one); the trip date is when it runs. A January trip booked today counts in this week&rsquo;s sales.</li>
                 <li><b>Deposit</b>: if they&rsquo;ve paid part (a tour deposit), put it in <b>Paid so far</b>. The rest shows as owed, and on a pay-on-the-day job the driver collects only the rest.</li>
                 <li><b>Invoice # and Bill to</b>: for invoiced work and account customers (a hotel, school or company), so Invoices groups them.</li>
                 <li><b>Another operator</b>: if Quick Shuttle or another company does the job, choose <b>Another operator…</b> as the driver, type their name, and put what we pay them under Cost.</li>
@@ -139,8 +139,8 @@ export default async function GuidePage() {
                 <li><b>Costs</b>: running costs each month (Google and Facebook ads, staff, fuel cards…) and what&rsquo;s left after them. <b>Copy last month&rsquo;s costs</b> saves typing. The <b>run calculator</b> works out what a contract or daily shuttle brings in.</li>
                 <li><b>Leads</b>: how many enquiries came in each day, and how many bookings were taken, so you can see how many turn into bookings.</li>
                 <li><b>Totals → Each month in detail</b>: the month&rsquo;s trips split into what was already booked before the month started and what was booked during it, sales taken that month (any trip date), GST, running costs and what&rsquo;s left.</li>
-                <li><b>Totals → Sales week by week</b>: what was booked each week, whatever the trip date (the old &ldquo;Week Ending&rdquo; table). The dashboard week table and the new-booking form show it too: &ldquo;Sales this week&rdquo; goes up as you enter a booking.</li>
-                <li><b>Bookings → Driver TBC → Next week</b>: on Sunday, open next week&rsquo;s jobs with no driver and assign them one by one.</li>
+                <li><b>Totals → Sales week by week</b>: what was booked each week, whatever the trip date (the old &ldquo;Week Ending&rdquo; table). The dashboard shows <b>Sales this week</b> at the top, and the new-booking form shows it going up as you enter a booking. <b>Bookings → Booked this week</b> lists them, with ‹ › to step through the weeks.</li>
+                <li><b>Bookings → Driver TBC → Next week</b>: on Sunday, open next week&rsquo;s jobs with no driver and assign them one by one. The calendar above the list shows who already has what that week.</li>
                 <li><b>Totals → How each month was paid</b> splits it by online, cash, card, bank and invoice.</li>
               </ul>
 

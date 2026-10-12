@@ -1,5 +1,6 @@
 import { METHODS, PAYMENTS, SERVICES, SOURCES, STATUSES } from "@/lib/constants";
 import { isIsoDate, isTime } from "@/lib/dates";
+import { guessDuration } from "@/lib/trip-time";
 import type { JobInput, JobMoney } from "@/lib/types";
 
 // Reads and checks the job form. Returns the values, or the first problem in
@@ -41,7 +42,6 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
   if (!SOURCES.includes(booking_source as never)) return { error: "Pick how the booking came in." };
 
   const nums = {
-    duration_min: number(fd, "duration_min", "Duration", 5, 1440, { int: true }),
     passengers: number(fd, "passengers", "Passengers", 1, 99, { int: true }),
     children: number(fd, "children", "Children", 0, 99, { int: true }),
     infants: number(fd, "infants", "Infants", 0, 99, { int: true }),
@@ -64,7 +64,15 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
   const paid_on = text(fd, "paid_on");
   if (paid_on && !isIsoDate(paid_on)) return { error: "The paid date isn't a valid date." };
   if ((N.driver_pay ?? 0) > (N.price ?? 0) && (N.price ?? 0) > 0) return { error: "Driver pay is more than the charge. Check the numbers." };
-  if ((N.children ?? 0) + (N.infants ?? 0) > (N.passengers ?? 1)) return { error: "Children and infants can't be more than the number of people." };
+  // The booking date: when it was taken, for the weekly sales. Blank keeps
+  // the saved one (today for a new booking).
+  const booked_on = text(fd, "booked_on");
+  if (booked_on && !isIsoDate(booked_on)) return { error: "The booking date isn't a valid date." };
+  // Children and infants aren't on the form any more; imported ones are kept,
+  // but never more than the number of people.
+  const passengers = N.passengers ?? 1;
+  const children = Math.min(N.children ?? 0, passengers);
+  const infants = Math.min(N.infants ?? 0, passengers - children);
   if ((N.amount_paid ?? 0) > (N.price ?? 0)) return { error: "Paid so far is more than the charge." };
 
   // "Another operator" in the driver list: the job goes to an outside company.
@@ -82,10 +90,10 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
       service_type: service_type as JobInput["service_type"],
       pickup_date,
       pickup_time,
-      duration_min: N.duration_min ?? 60,
+      duration_min: guessDuration(`${pickup_address} ${dropoff_address}`),
       pickup_address,
       dropoff_address,
-      passengers: N.passengers ?? 1,
+      passengers,
       luggage: N.luggage ?? 0,
       flight_no: textOrNull(fd, "flight_no", 60),
       customer_name,
@@ -94,8 +102,9 @@ export function parseJobForm(fd: FormData): { input: JobInput; money: JobMoney }
       booking_source: booking_source as JobInput["booking_source"],
       driver_id: driverChoice && driverChoice !== OPERATOR ? driverChoice : null,
       operator: operator || null,
-      children: N.children ?? 0,
-      infants: N.infants ?? 0,
+      children,
+      infants,
+      ...(booked_on ? { booked_on } : {}),
       vehicle_id: text(fd, "vehicle_id") || null,
       linked_job_id: text(fd, "linked_job_id") || null,
       is_shared: fd.get("is_shared") === "on",

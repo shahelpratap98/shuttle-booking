@@ -4,12 +4,13 @@ import { Fragment } from "react";
 import { AssignForm } from "@/app/(app)/jobs/job-controls";
 import { PaymentChip, PersonDot, RepeatChip, StatusChip, Unassigned } from "@/components/chips";
 import { MoreFilters } from "@/components/more-filters";
+import { WeekBoard } from "@/components/week-board";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { FilterSubmit } from "@/components/pending-buttons";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
 import { requireOffice } from "@/lib/auth";
 import { BILLABLE, NO_DRIVER, SERVICE_LABEL, SERVICES, STATUS_LABEL, STATUSES } from "@/lib/constants";
-import { addDays, fmtDay, fmtLong, fmtShort, fmtTime, isIsoDate, startOfWeek, todayIn } from "@/lib/dates";
+import { addDays, eachDay, fmtDay, fmtLong, fmtRange, fmtShort, fmtTime, isIsoDate, startOfWeek, todayIn } from "@/lib/dates";
 import { bookingRef, businessPay, charge, money, shareLabel } from "@/lib/format";
 import type { Job, JobQuery, JobStatus, ServiceType } from "@/lib/types";
 
@@ -17,6 +18,7 @@ export const metadata: Metadata = { title: "Bookings" };
 
 const VIEWS = {
   available: NO_DRIVER,
+  booked: "Booked this week",
   day: "By day",
   upcoming: "Upcoming",
   all: "All",
@@ -52,6 +54,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const week = view === "available" && (s("week") === "this" || s("week") === "next") ? s("week") : "";
   const nextMonday = addDays(startOfWeek(today), 7);
   const weekRange = week === "this" ? { from: today, to: addDays(nextMonday, -1) } : week === "next" ? { from: nextMonday, to: addDays(nextMonday, 6) } : null;
+  // Booked this week: what was taken in a Mon - Sun week by the day it was
+  // booked, whatever the trip date (the weekly sales).
+  const salesWeek = view === "booked" && isIsoDate(s("wk")) ? startOfWeek(s("wk")) : startOfWeek(today);
 
   const query: JobQuery = { search: search || undefined };
   switch (view) {
@@ -76,6 +81,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     case "flagged":
       Object.assign(query, { flagged: true });
       break;
+    case "booked":
+      Object.assign(query, { bookedFrom: salesWeek, bookedTo: addDays(salesWeek, 6) });
+      break;
     default:
       Object.assign(query, { order: "desc", limit: from || to || driver || search ? 2000 : 300 });
   }
@@ -87,7 +95,15 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   if (customer) query.customerKey = customer;
   if (series) Object.assign(query, { seriesId: series, order: "asc" });
 
-  const [found, people, vehicles] = await Promise.all([store.jobs(query), store.people(), store.vehicles()]);
+  // Driver TBC: the week's calendar above the list, to see who's already busy.
+  const boardWeek = week === "next" ? nextMonday : startOfWeek(today);
+  const [found, people, vehicles, boardJobs, boardOff] = await Promise.all([
+    store.jobs(query),
+    store.people(),
+    store.vehicles(),
+    view === "available" ? store.jobs({ from: boardWeek, to: addDays(boardWeek, 6) }) : Promise.resolve([]),
+    view === "available" ? store.timeOff(boardWeek, addDays(boardWeek, 6)) : Promise.resolve([]),
+  ]);
   let jobs = service ? found.filter((j) => j.service_type === service) : found;
   if (view === "unpaid") jobs = jobs.filter((j) => j.money && j.money.payment_status !== "paid");
   if (view === "collect") jobs = jobs.filter((j) => j.collect_amount > 0 && !j.collected_via);
@@ -140,7 +156,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       <PageHeader
         title="Bookings"
         intro={
-          view === "available" ? "Upcoming bookings with the driver still TBC. Pick a driver and vehicle, then Assign."
+          view === "available" ? "Upcoming bookings with the driver still TBC. Pick a driver and vehicle, then Assign. The calendar shows who already has what."
+          : view === "booked" ? "Everything booked in the week, whatever the trip date: the week's sales."
           : view === "collect" ? "Upcoming bookings where the driver collects the money on the day."
           : view === "flagged" ? "Bookings someone flagged for attention. Open one to see why, or clear the flag."
           : undefined
@@ -196,6 +213,36 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </nav>
       ) : null}
 
+      {view === "available" ? (
+        <section aria-label={`Calendar, ${fmtRange(boardWeek, addDays(boardWeek, 6))}`} className="mb-5 hidden sm:block print:hidden">
+          <h2 className="mb-2 text-sm font-bold">
+            {week === "next" ? "Next week" : "This week"}: {fmtRange(boardWeek, addDays(boardWeek, 6))}
+            <Link href={`/calendar?view=week&date=${boardWeek}`} className="link ml-3 text-sm font-semibold">Open in Calendar</Link>
+          </h2>
+          <WeekBoard
+            days={eachDay(boardWeek, addDays(boardWeek, 6))}
+            lanes={people
+              .filter((p) => (p.role === "driver" && p.is_active) || boardJobs.some((j) => j.driver_id === p.user_id))
+              .sort((a, b) => Number(a.role !== "driver") - Number(b.role !== "driver") || a.display_name.localeCompare(b.display_name))}
+            showUnassigned
+            jobs={boardJobs.filter((j) => j.status !== "cancelled" && j.status !== "no_show")}
+            off={boardOff}
+            office
+            today={today}
+            dayHref={(d) => `/calendar?view=day&date=${d}`}
+          />
+        </section>
+      ) : null}
+
+      {view === "booked" ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
+          <Link href={`/jobs?view=booked&wk=${addDays(salesWeek, -7)}`} className="btn btn-quiet btn-sm" aria-label="Previous week">‹</Link>
+          <h2 className="text-lg font-bold">Booked {fmtRange(salesWeek, addDays(salesWeek, 6))}</h2>
+          <Link href={`/jobs?view=booked&wk=${addDays(salesWeek, 7)}`} className="btn btn-quiet btn-sm" aria-label="Next week">›</Link>
+          {salesWeek !== startOfWeek(today) ? <Link href="/jobs?view=booked" className="btn btn-quiet btn-sm">This week</Link> : null}
+        </div>
+      ) : null}
+
       {view === "day" ? (
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 print:hidden">
           <div className="flex items-center gap-1.5">
@@ -217,6 +264,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
       <form className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end print:hidden" role="search">
         <input type="hidden" name="view" value={view} />
+        {view === "booked" && salesWeek !== startOfWeek(today) ? <input type="hidden" name="wk" value={salesWeek} /> : null}
         {week ? <input type="hidden" name="week" value={week} /> : null}
         {customer ? <input type="hidden" name="customer" value={customer} /> : null}
         {view === "day" ? <input type="hidden" name="date" value={day} /> : null}
@@ -283,7 +331,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       </p>
 
       {jobs.length === 0 ? (
-        <EmptyState title={view === "available" ? "Every upcoming booking has a driver." : view === "day" ? `Nothing booked for ${fmtDay(day)}.` : "No bookings match."}>
+        <EmptyState title={view === "available" ? "Every upcoming booking has a driver." : view === "day" ? `Nothing booked for ${fmtDay(day)}.` : view === "booked" ? "Nothing booked in this week." : "No bookings match."}>
           {view === "available" ? (
             "New bookings with the driver TBC will show up here."
           ) : view === "day" ? (

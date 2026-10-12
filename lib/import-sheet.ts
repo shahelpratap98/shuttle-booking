@@ -1,4 +1,5 @@
 import "server-only";
+import { guessDuration } from "@/lib/trip-time";
 import type { Workbook, Worksheet, CellValue } from "exceljs";
 import { isIsoDate } from "@/lib/dates";
 import type { BookingSource, JobInput, JobMoney, JobStatus, PaymentMethod, Profile, ServiceType, Vehicle } from "@/lib/types";
@@ -222,16 +223,6 @@ function sourceFrom(s: string): BookingSource | null {
   if (/return(ing)? customer|existing customer|look after/.test(t)) return "repeat";
   if (/agent|partner/.test(t)) return "agent";
   return null;
-}
-
-// How long the driver is tied up, including the drive back, from where it's going.
-function durationFor(a: string): number {
-  const s = a.toLowerCase();
-  if (/whole day|full day|day tour|tour|vessel|cruise/.test(s)) return 720;
-  if (/rotorua|tauranga|taupo|mount maunganui|whakatane|okere|papamoa|hobbiton|waitomo/.test(s)) return 420;
-  if (/waihi|thames|coromandel|hahei|whitianga|matamata|paeroa|tirau|putaruru|tokoroa/.test(s)) return 360;
-  if (/cambridge|te awamutu|huntly|gordonton|ngaruawahia|raglan|morrinsville|hamilton|pukete|fitzroy|tamahere/.test(s)) return 240;
-  return 150;
 }
 
 function serviceFor(a: string): ServiceType {
@@ -514,7 +505,7 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
           service_type: serviceFor(where),
           pickup_date: date,
           pickup_time: time,
-          duration_min: durationFor(where),
+          duration_min: guessDuration(where),
           pickup_address: (pickup || "Not given").slice(0, 300),
           dropoff_address: (dropoff || "Not given").slice(0, 300),
           passengers,

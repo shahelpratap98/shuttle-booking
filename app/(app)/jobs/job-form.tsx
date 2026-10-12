@@ -9,7 +9,8 @@ import {
   BILLABLE, METHOD_LABEL, METHODS, NO_DRIVER, PAYMENT_LABEL, PAYMENTS, ROLE_LABEL, SERVICE_LABEL, SERVICES, SOURCE_LABEL, SOURCES, STATUS_LABEL, STATUSES,
 } from "@/lib/constants";
 import { customerKey } from "@/lib/customers";
-import { fmtDate, fmtMonth, fmtShort, startOfWeek } from "@/lib/dates";
+import { addDays, fmtDate, fmtMonth, fmtShort, startOfWeek } from "@/lib/dates";
+import { guessDuration } from "@/lib/trip-time";
 import type { Customer } from "@/lib/store/types";
 import type { Job, JobStatus, PaymentStatus, Profile, Vehicle } from "@/lib/types";
 import { OPERATOR } from "@/lib/job-form";
@@ -17,11 +18,6 @@ import type { BookedSoFar, SalesThisWeek } from "./form-data";
 
 type Defaults = Partial<Job> & { money?: Job["money"] };
 
-// How long a job ties the driver up, including the drive back.
-const DURATIONS: [number, string][] = [
-  [60, "1 h"], [90, "1 h 30"], [120, "2 h"], [180, "3 h"], [240, "4 h · Hamilton run"], [300, "5 h"],
-  [360, "6 h"], [420, "7 h · Rotorua, Tauranga run"], [540, "9 h"], [720, "12 h · full day"],
-];
 const asNum = (s: string) => {
   const n = Number(s.replace(/[$,\s]/g, ""));
   return Number.isFinite(n) ? n : 0;
@@ -59,7 +55,9 @@ export function JobForm({
   const m = d.money;
 
   // The fields that feed the live sums are controlled; the rest aren't.
-  const [duration, setDuration] = useState(String(d.duration_min ?? 240));
+  const [pickupAt, setPickupAt] = useState(d.pickup_address ?? "");
+  const [dropoffAt, setDropoffAt] = useState(d.dropoff_address ?? "");
+  const [bookedOn, setBookedOn] = useState(job ? (job.booked_on ?? "") : today);
   const [driverId, setDriverId] = useState(d.driver_id ?? (d.operator ? OPERATOR : ""));
   const [paidSoFar, setPaidSoFar] = useState(m?.amount_paid ? String(m.amount_paid) : "");
   const [price, setPrice] = useState(m ? String(m.price) : "");
@@ -76,7 +74,9 @@ export function JobForm({
 
   const fmt = (n: number) => new Intl.NumberFormat("en-NZ", { style: "currency", currency }).format(n);
   const driver = people.find((p) => p.user_id === driverId);
-  const suggestPay = driver?.pay_rate ? Math.round(driver.pay_rate * (asNum(duration) / 60) * 100) / 100 : null;
+  // Hours for the hourly-rate suggestion, from where the trip goes.
+  const hours = guessDuration(`${pickupAt} ${dropoffAt}`) / 60;
+  const suggestPay = driver?.pay_rate ? Math.round(driver.pay_rate * hours * 100) / 100 : null;
 
   const charged = asNum(price);
   const toDriver = asNum(driverPay);
@@ -116,7 +116,7 @@ export function JobForm({
   const active = people.filter((p) => p.is_active || p.user_id === d.driver_id);
   const drivers = active.filter((p) => p.role === "driver");
   const office = active.filter((p) => p.role !== "driver");
-  const durationOptions = DURATIONS.some(([v]) => String(v) === duration) ? DURATIONS : [...DURATIONS, [asNum(duration), `${duration} min`] as [number, string]];
+  const salesThisWeekShown = salesThisWeek && !job && bookedOn >= salesThisWeek.start && bookedOn <= addDays(salesThisWeek.start, 6);
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -124,20 +124,21 @@ export function JobForm({
       {d.linked_job_id ? <input type="hidden" name="linked_job_id" value={d.linked_job_id} /> : null}
       {/* kept as the driver reported it */}
       <input type="hidden" name="distance_km" value={d.distance_km ?? ""} />
+      {/* no longer asked for; kept from imported bookings */}
+      <input type="hidden" name="children" value={d.children ?? 0} />
+      <input type="hidden" name="infants" value={d.infants ?? 0} />
 
       <div className="flex min-w-0 flex-col gap-4">
         <Section title="Trip">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Field label="Date" htmlFor="pickup_date">
+            <Field label="Booking date" htmlFor="booked_on" hint="The day it was booked">
+              <input id="booked_on" name="booked_on" type="date" value={bookedOn} onChange={(e) => setBookedOn(e.target.value)} className="field" />
+            </Field>
+            <Field label="Trip date" htmlFor="pickup_date">
               <input id="pickup_date" name="pickup_date" type="date" required value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} className="field" />
             </Field>
             <Field label="Pickup time" htmlFor="pickup_time">
               <input id="pickup_time" name="pickup_time" type="time" required step={300} defaultValue={d.pickup_time} className="field" />
-            </Field>
-            <Field label="Driver busy for" htmlFor="duration_min" hint="Including the drive back">
-              <select id="duration_min" name="duration_min" value={duration} onChange={(e) => setDuration(e.target.value)} className="field">
-                {durationOptions.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-              </select>
             </Field>
             <Field label="Service" htmlFor="service_type">
               <select id="service_type" name="service_type" defaultValue={d.service_type ?? "airport"} className="field">
@@ -147,10 +148,10 @@ export function JobForm({
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Pick up" htmlFor="pickup_address">
-              <input id="pickup_address" name="pickup_address" required maxLength={300} list="places" defaultValue={d.pickup_address} className="field" autoComplete="off" />
+              <input id="pickup_address" name="pickup_address" required maxLength={300} list="places" defaultValue={d.pickup_address} onChange={(e) => setPickupAt(e.target.value)} className="field" autoComplete="off" />
             </Field>
             <Field label="Drop off" htmlFor="dropoff_address">
-              <input id="dropoff_address" name="dropoff_address" required maxLength={300} list="places" defaultValue={d.dropoff_address} className="field" autoComplete="off" />
+              <input id="dropoff_address" name="dropoff_address" required maxLength={300} list="places" defaultValue={d.dropoff_address} onChange={(e) => setDropoffAt(e.target.value)} className="field" autoComplete="off" />
             </Field>
             <datalist id="places">{places.map((p) => <option key={p} value={p} />)}</datalist>
           </div>
@@ -158,16 +159,10 @@ export function JobForm({
             <Field label="# of people" htmlFor="passengers">
               <input id="passengers" name="passengers" type="number" min={1} max={99} required defaultValue={d.passengers ?? 1} className="field" />
             </Field>
-            <Field label="of which children" htmlFor="children">
-              <input id="children" name="children" type="number" min={0} max={99} defaultValue={d.children ?? 0} className="field" />
-            </Field>
-            <Field label="of which infants" htmlFor="infants" hint="Under 2, need a baby seat">
-              <input id="infants" name="infants" type="number" min={0} max={99} defaultValue={d.infants ?? 0} className="field" />
-            </Field>
             <Field label="Bags" htmlFor="luggage">
               <input id="luggage" name="luggage" type="number" min={0} max={199} defaultValue={d.luggage ?? 0} className="field" />
             </Field>
-            <div className="col-span-2 sm:col-span-4">
+            <div className="col-span-2">
               <Field label="Flight information" htmlFor="flight_no" hint="Flight number, or ship / wharf details">
                 <input id="flight_no" name="flight_no" maxLength={60} defaultValue={d.flight_no ?? ""} className="field" placeholder="NZ175" />
               </Field>
@@ -278,7 +273,7 @@ export function JobForm({
                 {counts ? <> &rarr; <b>{whole(month.after.total)}</b> with this one</> : null}
               </p>
               <p className="mt-1 text-muted">
-                Week of {fmtShort(startOfWeek(pickupDate))}: {whole(week.after.total)}
+                Trips in the week of {fmtShort(startOfWeek(pickupDate))}: {whole(week.after.total)}
                 {weeklyTarget ? (
                   <> of {whole(weeklyTarget)} target ({Math.round((week.after.total / weeklyTarget) * 100)}%)</>
                 ) : (
@@ -286,7 +281,7 @@ export function JobForm({
                 )}
                 {!counts ? " (enquiries and cancelled bookings don't count)" : ""}
               </p>
-              {salesThisWeek && !job ? (
+              {salesThisWeekShown ? (
                 <p className="mt-1">
                   Sales this week (booked since {fmtShort(salesThisWeek.start)}): {whole(salesThisWeek.total)}
                   {counts ? <> &rarr; <b>{whole(salesThisWeek.total + charged)}</b> with this one</> : null}

@@ -41,12 +41,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     store.vehicles(),
     store.weeklyTarget(),
   ]);
-  const [flagged, unpaidDrivers, sold] = await Promise.all([
+  const thisWeek = startOfWeek(today);
+  const [flagged, unpaidDrivers, sold, recentSales] = await Promise.all([
     store.jobs({ flagged: true }), // a flag stays until someone clears it, however old the trip
     store.jobs({ unsettled: true, to: today, statuses: ["completed", "no_show"] }),
     // Sales: bookings taken in the trend weeks, whatever the trip date.
     store.jobs({ bookedFrom: trendStart, bookedTo: addDays(startOfWeek(period.to), 6), statuses: BILLABLE }),
+    // This week's and last week's sales, for the card at the top.
+    store.jobs({ bookedFrom: addDays(thisWeek, -7), bookedTo: addDays(thisWeek, 6), statuses: BILLABLE }),
   ]);
+  const salesNow = recentSales.filter((j) => j.booked_on! >= thisWeek);
+  const salesNowTotal = salesNow.reduce((s, j) => s + charge(j), 0);
+  const salesLastTotal = recentSales.filter((j) => j.booked_on! < thisWeek).reduce((s, j) => s + charge(j), 0);
+  const salesToday = salesNow.filter((j) => j.booked_on === today);
   const vehicleDue = vehicleAlerts(vehicles, today);
   const driverOwed = unpaidDrivers.reduce((s, j) => s + j.driver_pay - (j.collected_via === "cash" ? j.collect_amount : 0), 0);
   const driversOwed = new Set(unpaidDrivers.filter((j) => j.driver_pay > 0).map((j) => j.driver_id ?? j.operator)).size;
@@ -131,6 +138,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Link>
         ))}
       </nav>
+
+      {/* this week's sales: everything booked since Monday, whatever the trip date */}
+      <section aria-label="Sales this week" className="card mb-4 flex flex-col gap-3 border-accent/50 p-4 sm:flex-row sm:items-center sm:gap-6">
+        <div>
+          <p className="text-sm font-semibold text-muted">Sales this week <span className="font-normal">(booked {fmtShort(thisWeek)} – {fmtShort(addDays(thisWeek, 6))}, any trip date)</span></p>
+          <p className="text-3xl font-bold tabular">{m(salesNowTotal)}</p>
+          <p className="text-sm text-muted">
+            {num(salesNow.length)} booking{salesNow.length === 1 ? "" : "s"} · today {m(salesToday.reduce((s, j) => s + charge(j), 0))} ({salesToday.length}) · last week {m(salesLastTotal)}
+          </p>
+        </div>
+        {target ? <div className="min-w-48 flex-1"><TargetBar value={salesNowTotal} target={target} /></div> : null}
+        <Link href="/jobs?view=booked" className="btn btn-quiet btn-sm sm:ml-auto">See this week&rsquo;s bookings</Link>
+      </section>
 
       {/* headline numbers, in the booking sheet's terms */}
       <section aria-label="Key numbers" className="grid grid-cols-2 gap-3 lg:grid-cols-6">

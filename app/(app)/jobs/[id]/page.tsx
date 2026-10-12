@@ -14,7 +14,7 @@ import { isOffice, requireViewer } from "@/lib/auth";
 import { jobWarnings } from "@/lib/clashes";
 import { BILLABLE, METHOD_LABEL, SERVICE_LABEL, SOURCE_LABEL, STATUS_LABEL } from "@/lib/constants";
 import { customerKey } from "@/lib/customers";
-import { addDays, endOfMonth, fmtDate, fmtDay, fmtDuration, fmtLong, fmtMonth, fmtShort, fmtTime, minutesOf, startOfMonth, startOfWeek, timeFromMinutes, todayIn, weekdayIndex, WEEKDAYS } from "@/lib/dates";
+import { addDays, endOfMonth, fmtDate, fmtDay, fmtLong, fmtMonth, fmtShort, fmtTime, startOfMonth, startOfWeek, todayIn, weekdayIndex, WEEKDAYS } from "@/lib/dates";
 import { bookingRef, businessPay, charge, expenses, gstOf, jobRef, money, profit, shareLabel, whatsappNumber } from "@/lib/format";
 import { jobCardText } from "@/lib/job-card";
 
@@ -64,7 +64,6 @@ export default async function JobPage({
   const vehicle = vehicles.find((v) => v.id === job.vehicle_id);
   const warnings = office ? jobWarnings(job, sameDay, timeOff, people, vehicles) : [];
   const sharedWith = job.is_shared ? sameDay.filter((o) => o.id !== job.id && o.is_shared && o.driver_id === job.driver_id && o.status !== "cancelled") : [];
-  const ends = timeFromMinutes(minutesOf(job.pickup_time) + job.duration_min);
   const error = typeof q.error === "string" ? q.error : undefined;
   const m = job.money;
   const mine = job.driver_id === viewer.user_id;
@@ -86,7 +85,7 @@ export default async function JobPage({
             <StatusChip status={job.status} />
             {job.is_shared ? <span className="chip bg-info-bg text-info">Shared ride</span> : null}
             {office && job.flag_note ? <span className="chip bg-bad-bg text-bad">⚑ Flagged</span> : null}
-            {SERVICE_LABEL[job.service_type]} · driver busy until about {fmtTime(ends)} ({fmtDuration(job.duration_min)})
+            {SERVICE_LABEL[job.service_type]}
           </p>
         </div>
         {office ? (
@@ -197,7 +196,7 @@ export default async function JobPage({
               {job.customer_email ? <a href={`mailto:${job.customer_email}`} className="link">{job.customer_email}</a> : null}
               {!job.customer_phone && !job.customer_email ? <span className="text-muted">No contact details</span> : null}
             </div>
-            {office ? <p className="mt-2 text-sm text-muted">Booked through {SOURCE_LABEL[job.booking_source].toLowerCase()} on {fmtLong(job.created_at.slice(0, 10))}.</p> : null}
+            {office ? <p className="mt-2 text-sm text-muted">Booked through {SOURCE_LABEL[job.booking_source].toLowerCase()} on {fmtLong(job.booked_on ?? job.created_at.slice(0, 10))}.</p> : null}
             {history.length ? (
               <div className="mt-3">
                 <p className="text-xs font-semibold text-muted uppercase">Their other bookings</p>

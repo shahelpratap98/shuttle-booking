@@ -67,7 +67,7 @@ Driver Pay | More Info | Flight Information | Booking Reference).
 | Online Payment / Cash / person totals (`SUMIF`) | Totals → How each month was paid |
 | Quick Shuttle, Maxcare in Driver / Vehicle | Driver: "Another operator…" (what we pay them = driver pay) |
 | Yellow / red highlighted rows | Flag for attention; Flagged tab; dashboard |
-| Shared one off (TSM-SS, Ad / Ch / Inf) | Shared ride tick, children and infants on the booking |
+| Shared one off (TSM-SS, Ad / Ch / Inf) | Shared ride tick; imported children and infants are kept on the booking (no longer on the form) |
 | Lead Record | Leads page (enquiries a day, conversion) |
 | Build up JD: marketing costs, contract run sums | Costs page: monthly running costs, marketing per booking, run calculator |
 | Plan: GST reconciliations, vehicle servicing | GST setting (Totals, Excel download); vehicle COF / rego / service due dates with reminders |
@@ -154,8 +154,12 @@ separate table (`job_money`) that drivers cannot read at all.
 - **Charges** = what customers pay. **Driver pay** = what the driver gets for
   the job. **Trekway pay** = Charges − Driver pay (the label follows the
   business name in Settings). Expenses, if recorded, come off that for profit.
-- **Driver busy for** blocks the driver's calendar, including the drive back
-  (Hamilton run 4 h, Rotorua or Tauranga run 7 h). Clash warnings use it.
+- **How long a trip takes** isn't entered: it's worked out from the addresses
+  (`lib/trip-time.ts`: Hamilton run 4 h, Rotorua or Tauranga run 7 h, else
+  2 h 30) and blocks the driver's calendar. Clash warnings use it.
+- **Booking date vs trip date**: the form has both. Weekly sales (dashboard,
+  Bookings → Booked this week, Totals → Sales week by week) count by booking
+  date; everything else by trip date.
 - **Totals and targets** count bookings and their charges by pick-up date, so
   a December trip booked in October counts in December. The weekly target is
   compared with each week's total booking $.
