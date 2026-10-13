@@ -9,15 +9,15 @@ import { EmptyState, PageHeader } from "@/components/page-header";
 import { FilterSubmit } from "@/components/pending-buttons";
 import { driverOptions, vehicleOptions } from "@/lib/assign-options";
 import { requireOffice } from "@/lib/auth";
-import { BILLABLE, NO_DRIVER, SERVICE_LABEL, SERVICES, STATUS_LABEL, STATUSES } from "@/lib/constants";
-import { addDays, eachDay, fmtDay, fmtLong, fmtRange, fmtShort, fmtTime, isIsoDate, startOfWeek, todayIn } from "@/lib/dates";
+import { BILLABLE, SERVICE_LABEL, SERVICES, STATUS_LABEL, STATUSES } from "@/lib/constants";
+import { addDays, daysBetween, eachDay, fmtDay, fmtLong, fmtRange, fmtTime, isIsoDate, startOfWeek, todayIn } from "@/lib/dates";
 import { bookingRef, businessPay, charge, money, shareLabel } from "@/lib/format";
 import type { Job, JobQuery, JobStatus, ServiceType } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Bookings" };
 
 const VIEWS = {
-  available: NO_DRIVER,
+  available: "Assign bookings",
   booked: "Booked this week",
   day: "By day",
   upcoming: "Upcoming",
@@ -50,10 +50,22 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const status = STATUSES.includes(s("status") as JobStatus) ? (s("status") as JobStatus) : "";
   const service = SERVICES.includes(s("service") as ServiceType) ? (s("service") as ServiceType) : "";
   const search = s("q").slice(0, 80);
-  // Driver TBC, one week at a time: on Sunday the office hands out next week's jobs.
-  const week = view === "available" && (s("week") === "this" || s("week") === "next") ? s("week") : "";
-  const nextMonday = addDays(startOfWeek(today), 7);
-  const weekRange = week === "this" ? { from: today, to: addDays(nextMonday, -1) } : week === "next" ? { from: nextMonday, to: addDays(nextMonday, 6) } : null;
+  // Assign bookings, one week at a time, as far ahead as you like: on Sunday
+  // the office hands out next week's jobs, or the weeks after. "week" is the
+  // Monday (or "this" / "next"); none means every upcoming booking.
+  const thisMonday = startOfWeek(today);
+  const askedWeek = s("week");
+  const weekStart =
+    view !== "available" ? null
+    : askedWeek === "this" ? thisMonday
+    : askedWeek === "next" ? addDays(thisMonday, 7)
+    : isIsoDate(askedWeek) && startOfWeek(askedWeek) >= thisMonday ? startOfWeek(askedWeek)
+    : null;
+  const week = weekStart ?? "";
+  const weekRange = weekStart ? { from: weekStart === thisMonday ? today : weekStart, to: addDays(weekStart, 6) } : null;
+  const weeksAhead = (w: string) => Math.round(daysBetween(thisMonday, w) / 7);
+  const weekName = (w: string) => (weeksAhead(w) === 0 ? "This week" : weeksAhead(w) === 1 ? "Next week" : `In ${weeksAhead(w)} weeks`);
+  const QUICK_WEEKS = [0, 1, 2, 3].map((n) => addDays(thisMonday, 7 * n));
   // Booked this week: what was taken in a Mon - Sun week by the day it was
   // booked, whatever the trip date (the weekly sales).
   const salesWeek = view === "booked" && isIsoDate(s("wk")) ? startOfWeek(s("wk")) : startOfWeek(today);
@@ -95,15 +107,20 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   if (customer) query.customerKey = customer;
   if (series) Object.assign(query, { seriesId: series, order: "asc" });
 
-  // Driver TBC: the week's calendar above the list, to see who's already busy.
-  const boardWeek = week === "next" ? nextMonday : startOfWeek(today);
-  const [found, people, vehicles, boardJobs, boardOff] = await Promise.all([
+  // Assign bookings: the week's calendar above the list, to see who's already
+  // busy, and how many jobs still need a driver in each of the next weeks.
+  const boardWeek = weekStart ?? thisMonday;
+  const [found, people, vehicles, boardJobs, boardOff, openSoon] = await Promise.all([
     store.jobs(query),
     store.people(),
     store.vehicles(),
     view === "available" ? store.jobs({ from: boardWeek, to: addDays(boardWeek, 6) }) : Promise.resolve([]),
     view === "available" ? store.timeOff(boardWeek, addDays(boardWeek, 6)) : Promise.resolve([]),
+    view === "available"
+      ? store.jobs({ from: today, to: addDays(thisMonday, 7 * QUICK_WEEKS.length - 1), unassigned: true, statuses: ["confirmed", "enquiry"] })
+      : Promise.resolve([]),
   ]);
+  const openIn = (w: string) => openSoon.filter((j) => startOfWeek(j.pickup_date) === w).length;
   let jobs = service ? found.filter((j) => j.service_type === service) : found;
   if (view === "unpaid") jobs = jobs.filter((j) => j.money && j.money.payment_status !== "paid");
   if (view === "collect") jobs = jobs.filter((j) => j.collect_amount > 0 && !j.collected_via);
@@ -156,7 +173,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       <PageHeader
         title="Bookings"
         intro={
-          view === "available" ? "Upcoming bookings with the driver still TBC. Pick a driver and vehicle, then Assign. The calendar shows who already has what."
+          view === "available" ? "Upcoming bookings with the driver still TBC. Pick a week, then a driver and vehicle for each booking, and Assign. The calendar shows who already has what that week."
           : view === "booked" ? "Everything booked in the week, whatever the trip date: the week's sales."
           : view === "collect" ? "Upcoming bookings where the driver collects the money on the day."
           : view === "flagged" ? "Bookings someone flagged for attention. Open one to see why, or clear the flag."
@@ -199,26 +216,40 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       </nav>
 
       {view === "available" ? (
-        <nav aria-label="Which week" className="mb-4 flex flex-wrap items-center gap-1.5 print:hidden">
-          {([["", "All upcoming"], ["this", "This week"], ["next", `Next week (from ${fmtShort(nextMonday)})`]] as const).map(([w, label]) => (
-            <Link
-              key={w || "all"}
-              href={w ? `/jobs?view=available&week=${w}` : "/jobs?view=available"}
-              aria-current={w === week ? "page" : undefined}
-              className={`btn btn-sm ${w === week ? "btn-primary" : "btn-quiet"}`}
-            >
-              {label}
+        <div className="mb-4 flex flex-col gap-2 print:hidden">
+          <nav aria-label="Which week" className="flex flex-wrap items-center gap-1.5">
+            <Link href="/jobs?view=available" aria-current={!weekStart ? "page" : undefined} className={`btn btn-sm ${!weekStart ? "btn-primary" : "btn-quiet"}`}>
+              All upcoming
             </Link>
-          ))}
-        </nav>
+            {QUICK_WEEKS.map((w) => (
+              <Link
+                key={w}
+                href={`/jobs?view=available&week=${w}`}
+                aria-current={w === weekStart ? "page" : undefined}
+                className={`btn btn-sm ${w === weekStart ? "btn-primary" : "btn-quiet"}`}
+              >
+                {weekName(w)}
+                <span className={`rounded-full px-1.5 text-xs ${openIn(w) ? "bg-accent text-on-accent" : "bg-surface-2 text-muted"}`}>{openIn(w)}</span>
+              </Link>
+            ))}
+          </nav>
+          <div className="flex items-center gap-1.5">
+            {boardWeek > thisMonday ? (
+              <Link href={`/jobs?view=available&week=${addDays(boardWeek, -7)}`} className="btn btn-quiet btn-sm" aria-label="Previous week">‹</Link>
+            ) : (
+              <span className="btn btn-quiet btn-sm opacity-40" aria-hidden="true">‹</span>
+            )}
+            <h2 className="min-w-0 px-1 text-sm font-bold sm:text-base">
+              {weekName(boardWeek)}: {fmtRange(boardWeek, addDays(boardWeek, 6))}
+            </h2>
+            <Link href={`/jobs?view=available&week=${addDays(boardWeek, 7)}`} className="btn btn-quiet btn-sm" aria-label="Next week">›</Link>
+            <Link href={`/calendar?view=week&date=${boardWeek}`} className="link ml-2 hidden text-sm sm:inline">Open in Calendar</Link>
+          </div>
+        </div>
       ) : null}
 
       {view === "available" ? (
         <section aria-label={`Calendar, ${fmtRange(boardWeek, addDays(boardWeek, 6))}`} className="mb-5 hidden sm:block print:hidden">
-          <h2 className="mb-2 text-sm font-bold">
-            {week === "next" ? "Next week" : "This week"}: {fmtRange(boardWeek, addDays(boardWeek, 6))}
-            <Link href={`/calendar?view=week&date=${boardWeek}`} className="link ml-3 text-sm font-semibold">Open in Calendar</Link>
-          </h2>
           <WeekBoard
             days={eachDay(boardWeek, addDays(boardWeek, 6))}
             lanes={people
@@ -331,7 +362,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       </p>
 
       {jobs.length === 0 ? (
-        <EmptyState title={view === "available" ? "Every upcoming booking has a driver." : view === "day" ? `Nothing booked for ${fmtDay(day)}.` : view === "booked" ? "Nothing booked in this week." : "No bookings match."}>
+        <EmptyState title={view === "available" ? (weekStart ? `Every booking ${weekName(weekStart).toLowerCase()} has a driver.` : "Every upcoming booking has a driver.") : view === "day" ? `Nothing booked for ${fmtDay(day)}.` : view === "booked" ? "Nothing booked in this week." : "No bookings match."}>
           {view === "available" ? (
             "New bookings with the driver TBC will show up here."
           ) : view === "day" ? (

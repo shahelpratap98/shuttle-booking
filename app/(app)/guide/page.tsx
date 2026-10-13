@@ -140,7 +140,7 @@ export default async function GuidePage() {
                 <li><b>Leads</b>: how many enquiries came in each day, and how many bookings were taken, so you can see how many turn into bookings.</li>
                 <li><b>Totals → Each month in detail</b>: the month&rsquo;s trips split into what was already booked before the month started and what was booked during it, sales taken that month (any trip date), GST, running costs and what&rsquo;s left.</li>
                 <li><b>Totals → Sales week by week</b>: what was booked each week, whatever the trip date (the old &ldquo;Week Ending&rdquo; table). The dashboard shows <b>Sales this week</b> at the top, and the new-booking form shows it going up as you enter a booking. <b>Bookings → Booked this week</b> lists them, with ‹ › to step through the weeks.</li>
-                <li><b>Bookings → Driver TBC → Next week</b>: on Sunday, open next week&rsquo;s jobs with no driver and assign them one by one. The calendar above the list shows who already has what that week.</li>
+                <li><b>Bookings → Assign bookings</b>: pick a week (This week, Next week, In 2 weeks, In 3 weeks, or use ‹ › to go further ahead) and give each booking with no driver to someone. The number on each week is how many still need a driver, and the calendar above the list shows who already has what that week.</li>
                 <li><b>Totals → How each month was paid</b> splits it by online, cash, card, bank and invoice.</li>
               </ul>
 
