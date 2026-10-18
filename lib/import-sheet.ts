@@ -419,9 +419,15 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       const refText = text(at(row, "ref"));
 
       // Old tabs had no Driver column; the driver's name went under More Info.
+      // Some rows with a Driver column did the same: Driver TBC or blank, and
+      // just a name ("Sunny") under More Info.
+      let driverFromInfo = false;
       if (!header.cols.has("driver")) {
         const fromInfo = matchDriver(moreInfo.split(/[\s,-]+/)[0] ?? "");
-        if (fromInfo) driver = fromInfo;
+        if (fromInfo) { driver = fromInfo; driverFromInfo = true; }
+      } else if (driver === null && !operator && /^[a-z]+\.?$/i.test(moreInfo)) {
+        const fromInfo = matchDriver(moreInfo.replace(/\.$/, ""));
+        if (fromInfo) { driver = fromInfo; driverFromInfo = true; }
       }
       driverPay ??= driverPayFrom(`${moreInfo} ${refText} ${flightText}`, price ?? 0);
       if (/^cancel/i.test(moreInfo)) status = "cancelled";
@@ -443,7 +449,7 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       }
       const returnBooked = /return(ed)? booked/i;
       if (returnBooked.test(moreInfo)) notes.push("Return booked");
-      else if (moreInfo && !pay.recognised && !(driver && !header.cols.has("driver"))) notes.push(moreInfo);
+      else if (moreInfo && !pay.recognised && !driverFromInfo) notes.push(moreInfo);
       else if (pay.recognised && /paid to|given to|cash ?- ?\w/i.test(moreInfo)) notes.push(moreInfo);
 
       // Flight Information: a flight number, or whatever else they wrote there.
