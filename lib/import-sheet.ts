@@ -272,6 +272,21 @@ function findHeader(ws: Worksheet): { row: number; cols: Map<Col, number>; extra
   return null;
 }
 
+// Same place, give or take spelling and punctuation ("Auckland Internatioal").
+const placeKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14);
+const samePlace = (a: string, b: string) => placeKey(a).length >= 6 && placeKey(a) === placeKey(b);
+
+// "Feb-2027", "Oct-26", "June-27", "Sept 2026": the month and year a monthly
+// tab is for, so a date typed with the wrong year can be put right.
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+function tabMonth(name: string): { year: number; month: number } | null {
+  const m = /^\s*([a-z]{3})[a-z]*[\s._-]*(\d{2}|\d{4})\s*$/i.exec(name);
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[1].toLowerCase()) + 1;
+  if (!month) return null;
+  return { year: m[2].length === 2 ? 2000 + Number(m[2]) : Number(m[2]), month };
+}
+
 export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: Vehicle[]; today: string }): ParseResult {
   const result: ParseResult = { sheets: [], bookings: [], skipped: [] };
   const people = ctx.people.filter((p) => p.is_active);
@@ -304,6 +319,7 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       return v && typeof v === "object" && ("formula" in v || "sharedFormula" in v) ? String(v.formula ?? v.sharedFormula ?? "") : "";
     };
     let lastDate: string | null = null;
+    const tab = tabMonth(ws.name);
 
     for (let r = header.row + 1; r <= ws.rowCount && result.bookings.length < MAX_ROWS; r++) {
       const row = ws.getRow(r);
@@ -315,6 +331,14 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       const dayOnly = /^(\d{1,2})\b/.exec(text(at(row, "date")));
       if (!ownDate && dayOnly && lastDate && isIsoDate(`${lastDate.slice(0, 8)}${dayOnly[1].padStart(2, "0")}`)) {
         ownDate = `${lastDate.slice(0, 8)}${dayOnly[1].padStart(2, "0")}`;
+      }
+      // A date typed with last year on this month's tab ("7 Feb 2026" on the
+      // Feb-2027 tab) is a typo: use the tab's year. Otherwise a future trip
+      // looks finished, and gets marked done and paid.
+      let yearFixed: string | null = null;
+      if (ownDate && tab && Number(ownDate.slice(5, 7)) === tab.month && Number(ownDate.slice(0, 4)) !== tab.year) {
+        yearFixed = ownDate;
+        ownDate = `${tab.year}${ownDate.slice(4)}`;
       }
       if (ownDate) lastDate = ownDate;
       const amount = amountOf(at(row, "charges"));
@@ -340,6 +364,7 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       const date = ownDate ?? lastDate;
       if (!date) { skip("no date"); continue; }
       if (!ownDate) warnings.push("No date on this row; took the date from the row above");
+      if (yearFixed) warnings.push(`Date said ${yearFixed.slice(0, 4)} on the ${ws.name} tab; used ${date.slice(0, 4)}`);
       // A row with money on it is kept even when half filled in (a tour, the
       // second day of an event), so the month's totals match the sheet.
       const hasCharge = (amountOf(at(row, "charges")) ?? 0) > 0;
@@ -549,6 +574,26 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       });
     }
   });
+
+  // Both legs of a return trip often share one reference (TW-...) with no
+  // -OUT / -RET on it: two rows, two bookings, the earlier one there and the
+  // later one back, linked to each other.
+  const byRef = new Map<string, ParsedBooking[]>();
+  for (const b of result.bookings) {
+    if (b.refBase && !b.leg && b.input.status !== "cancelled") byRef.set(b.refBase.toUpperCase(), [...(byRef.get(b.refBase.toUpperCase()) ?? []), b]);
+  }
+  const when = (b: ParsedBooking) => b.input.pickup_date + b.input.pickup_time;
+  for (const legs of byRef.values()) {
+    if (legs.length !== 2) continue;
+    legs.sort((a, b) => when(a).localeCompare(when(b)));
+    if (when(legs[0]) === when(legs[1])) continue; // two vehicles for one trip, not there and back
+    // The way back starts where the first trip ended, or ends where it started.
+    const [there, back] = [legs[0].input, legs[1].input];
+    if (!samePlace(back.pickup_address, there.dropoff_address) && !samePlace(back.dropoff_address, there.pickup_address)) continue;
+    legs[0].leg = "out";
+    legs[1].leg = "ret";
+    for (const b of legs) b.refBase = b.refBase!.toUpperCase();
+  }
 
   // Outbound legs first, so a return can point at its outbound job.
   result.bookings.sort((a, b) => (a.input.pickup_date + a.input.pickup_time).localeCompare(b.input.pickup_date + b.input.pickup_time));
