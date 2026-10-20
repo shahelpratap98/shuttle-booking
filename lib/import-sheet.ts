@@ -438,11 +438,6 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       const price = amountOf(at(row, "charges"));
       if (price === null) warnings.push("No charge on this row");
       let driverPay = amountOf(at(row, "driverPay"));
-      // A typed-in Trekway Pay that isn't charge − driver pay: the rest went to the driver.
-      const trekway = amountOf(at(row, "trekwayPay"));
-      if (trekway !== null && !formulaOf(row, "trekwayPay") && price !== null && (driverPay ?? 0) === 0 && trekway < price) {
-        driverPay = Math.round((price - trekway) * 100) / 100;
-      }
       const chargeFormula = formulaOf(row, "charges");
       const shared = /\/\s*\d/.test(chargeFormula);
       if (shared) notes.push(`Charge split: ${chargeFormula.replace(/^=/, "")}`);
@@ -461,6 +456,19 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       } else if (driver === null && !operator && /^[a-z]+\.?$/i.test(moreInfo)) {
         const fromInfo = matchDriver(moreInfo.replace(/\.$/, ""));
         if (fromInfo) { driver = fromInfo; driverFromInfo = true; }
+      }
+      // A typed-in Trekway Pay that isn't charge − driver pay. On a trip with
+      // a driver (ours, a name not on the team yet, or another operator) the
+      // rest went to the driver. A Driver TBC trip has nobody to pay yet: its
+      // Driver Pay stands, and a Trekway Pay that doesn't fit is flagged.
+      const trekway = amountOf(at(row, "trekwayPay"));
+      if (trekway !== null && !formulaOf(row, "trekwayPay") && price !== null) {
+        const hasDriver = driver !== null || Boolean(operator);
+        if (hasDriver && (driverPay ?? 0) === 0 && trekway < price) {
+          driverPay = Math.round((price - trekway) * 100) / 100;
+        } else if (!hasDriver && trekway !== Math.round((price - (driverPay ?? 0)) * 100) / 100) {
+          warnings.push(`Trekway Pay says $${trekway}, but the charge is $${price} and Driver Pay $${driverPay ?? 0}; driver pay left at $${driverPay ?? 0} until a driver is given the job`);
+        }
       }
       driverPay ??= driverPayFrom(`${moreInfo} ${refText} ${flightText}`, price ?? 0);
       if (/^cancel/i.test(moreInfo)) status = "cancelled";
