@@ -63,7 +63,8 @@ const HEADERS: [RegExp, Col][] = [
   [/^e ?mail$/, "email"],
 ];
 
-const norm = (s: string) => s.toLowerCase().replace(/[#:. ]/g, " ").replace(/\s+/g, " ").trim();
+// Header text as plain words: "Pick-up Time", "Drop_off", "Phone #:" all match.
+const norm = (s: string) => s.toLowerCase().replace(/[#:.\-_/ ]/g, " ").replace(/\s+/g, " ").trim();
 
 // A cell's value as the spreadsheet shows it (formula results, rich text…).
 function raw(v: CellValue): unknown {
@@ -198,6 +199,12 @@ function paymentFrom(info: string, ctx: { date: string; past: boolean; price: nu
     const billTo = /charge hotel/.test(s) ? "Hotel" : null;
     if (/\bpaid\b/.test(s) && !/to be|not/.test(s)) return out({ status: "paid", method: method ?? "bank", paidOn: paidOn ?? null, billTo });
     return out({ status: "invoiced", billTo });
+  }
+
+  // "Collect cash", "Collect Cash Difference paid on Shared shuttle": the
+  // driver collects money on the day, whatever else the note says was paid.
+  if (/\bcollect(ing)?\b/.test(s)) {
+    return ctx.past ? out({ status: "paid", method: "cash", paidOn: ctx.date }) : out({ status: "pay_on_day" });
   }
 
   // A deposit: "Paid 3000" of a bigger charge.
@@ -380,6 +387,7 @@ export function parseWorkbook(wb: Workbook, ctx: { people: Profile[]; vehicles: 
       if (!time) {
         time = "00:00";
         warnings.push(`Time "${text(timeRaw) || "blank"}" not understood; set to midnight, fix it after import`);
+        if (text(timeRaw)) notes.push(`Time: ${text(timeRaw)}`); // "Shared Shuttle": keep what it said
       }
 
       const peopleText = text(at(row, "people"));
