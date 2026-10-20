@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { saveJob } from "@/app/(app)/jobs/actions";
 import { Spinner } from "@/components/spinner";
+import { TimeField } from "@/components/time-field";
 import { useFormAction } from "@/components/use-form-action";
 import {
   BILLABLE, METHOD_LABEL, METHODS, NO_DRIVER, PAYMENT_LABEL, PAYMENTS, ROLE_LABEL, SERVICE_LABEL, SERVICES, SOURCE_LABEL, SOURCES, STATUS_LABEL, STATUSES,
@@ -138,7 +139,7 @@ export function JobForm({
               <input id="pickup_date" name="pickup_date" type="date" required value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} className="field" />
             </Field>
             <Field label="Pickup time" htmlFor="pickup_time">
-              <input id="pickup_time" name="pickup_time" type="time" required step={300} defaultValue={d.pickup_time} className="field" />
+              <TimeField id="pickup_time" name="pickup_time" required defaultValue={d.pickup_time} />
             </Field>
             <Field label="Service" htmlFor="service_type">
               <select id="service_type" name="service_type" defaultValue={d.service_type ?? "airport"} className="field">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Spinner } from "@/components/spinner";
 import { useFormAction } from "@/components/use-form-action";
 import { ActionForm } from "@/components/action-form";
+import { fmtTime } from "@/lib/dates";
 import { addVehicles, importBookings } from "./actions";
 
 export function ImportForm({ currency }: { currency: string }) {
@@ -125,7 +126,7 @@ export function ImportForm({ currency }: { currency: string }) {
                   <tr key={`${r.sheet}-${r.row}`} className={r.duplicate ? "text-muted line-through decoration-1" : r.warnings.length ? "bg-warn-bg/40" : ""}>
                     <td className="whitespace-nowrap text-muted">{r.sheet} · {r.row}</td>
                     <td className="whitespace-nowrap">{fmtDate(r.date)}</td>
-                    <td>{r.time}</td>
+                    <td className="whitespace-nowrap">{fmtTime(r.time)}</td>
                     <td className="max-w-80">
                       <p className="truncate">{r.pickup} → {r.dropoff}</p>
                       {r.duplicate ? <p className="text-xs no-underline">Already in the app (or listed twice in the file), skipped</p> : null}
