@@ -465,7 +465,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                             <span className="font-bold tabular">{fmtTime(j.pickup_time)}</span>
                             <span className="font-semibold tabular">{j.money ? money(charge(j), cur) : ""}</span>
                           </span>
-                          <span className="truncate font-semibold">{j.customer_name} · {j.passengers} pax</span>
+                          <span className="truncate font-semibold">{j.customer_name} · {j.passengers} pax <span className="font-normal text-muted">· {bookingRef(j)}{j.booking_ref ? ` (J-${j.job_no})` : ""}</span></span>
                           <span className="truncate text-sm text-muted">{j.pickup_address} → {j.dropoff_address}</span>
                           <span className="mt-1 flex flex-wrap items-center gap-2 text-sm">
                             {d ? <span className="inline-flex items-center gap-1.5 font-semibold"><PersonDot colour={d.colour} />{d.display_name}</span> : j.operator ? <span className="chip bg-idle-bg text-idle">{j.operator}</span> : <Unassigned />}
@@ -546,7 +546,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                               <PaymentChip status={j.money.payment_status} />
                             ) : null}
                           </td>
-                          <td className="td whitespace-nowrap"><Link href={`/jobs/${j.id}`} className="link">{bookingRef(j)}</Link></td>
+                          <td className="td whitespace-nowrap">
+                            <Link href={`/jobs/${j.id}`} className="link">{bookingRef(j)}</Link>
+                            {j.booking_ref ? <span className="block text-xs text-muted">J-{j.job_no}</span> : null}
+                          </td>
                         </tr>
                       );
                     })}

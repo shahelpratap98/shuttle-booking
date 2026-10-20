@@ -43,6 +43,7 @@ export async function invitePerson(_prev: ActionState, fd: FormData): Promise<Ac
   const email = text(fd, "email").toLowerCase();
   const role = text(fd, "role") as Role;
   if (!name) return { ok: false, message: "Enter their name." };
+  if (/^(tbc|tba|driver tbc|none|no driver)$/i.test(name)) return { ok: false, message: `"${name}" means no driver yet, so it can't be a person's name.` };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Enter a valid email address." };
   if (!ROLES.includes(role)) return { ok: false, message: "Pick a role." };
 
@@ -72,6 +73,7 @@ export async function savePerson(_prev: ActionState, fd: FormData): Promise<Acti
   const active = checked(fd, "is_active");
   const rate = numberOrNull(fd, "pay_rate", "Pay rate", 0, 1000);
   if (!name) return { ok: false, message: "Name can't be blank." };
+  if (/^(tbc|tba|driver tbc|none|no driver)$/i.test(name)) return { ok: false, message: `"${name}" means no driver yet, so it can't be a person's name.` };
   if (!ROLES.includes(role)) return { ok: false, message: "Pick a role." };
   if (!/^#[0-9a-fA-F]{6}$/.test(colour)) return { ok: false, message: "Pick a colour." };
   if (typeof rate === "string") return { ok: false, message: rate };

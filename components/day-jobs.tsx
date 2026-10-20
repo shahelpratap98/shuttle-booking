@@ -25,7 +25,7 @@ export function DayJobs({
               href={`/jobs/${j.id}`}
               className={`card flex flex-col gap-2 p-3 hover:border-line-2 hover:bg-surface-2 sm:flex-row sm:items-center sm:gap-4 sm:p-4 ${gone ? "opacity-60" : ""}`}
             >
-              <span className="w-24 shrink-0 text-2xl font-bold tabular sm:text-[26px]">{fmtTime(j.pickup_time)}</span>
+              <span className="shrink-0 whitespace-nowrap text-2xl font-bold tabular sm:w-32 sm:text-[26px]">{fmtTime(j.pickup_time)}</span>
               <span className="min-w-0 flex-1">
                 <span className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold ${gone ? "line-through" : ""}`}>
                   {j.customer_name}
