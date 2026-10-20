@@ -28,7 +28,7 @@ export function TimeField({ id, name, defaultValue, required }: { id: string; na
   return (
     <div className="flex items-center gap-1">
       <input type="hidden" name={name} value={value} />
-      <select id={id} aria-label="Hour" required={required} value={hour} onChange={(e) => setHour(e.target.value)} className="field min-w-0 flex-1 px-2">
+      <select id={id} aria-label="Hour" required={required} value={hour} onChange={(e) => setHour(e.target.value)} className="field min-w-[3.6rem] flex-1 pl-2 pr-1">
         <option value="" disabled>
           –
         </option>
@@ -37,12 +37,12 @@ export function TimeField({ id, name, defaultValue, required }: { id: string; na
         ))}
       </select>
       <span aria-hidden="true" className="font-semibold text-muted">:</span>
-      <select aria-label="Minutes" value={minute} onChange={(e) => setMinute(e.target.value)} className="field min-w-0 flex-1 px-2">
+      <select aria-label="Minutes" value={minute} onChange={(e) => setMinute(e.target.value)} className="field min-w-[3.6rem] flex-1 pl-2 pr-1">
         {minutes.map((m) => (
           <option key={m} value={m}>{m}</option>
         ))}
       </select>
-      <select aria-label="am or pm" value={pm ? "pm" : "am"} onChange={(e) => setPm(e.target.value === "pm")} className="field min-w-0 flex-1 px-2">
+      <select aria-label="am or pm" value={pm ? "pm" : "am"} onChange={(e) => setPm(e.target.value === "pm")} className="field min-w-[3.6rem] flex-1 pl-2 pr-1">
         <option value="am">am</option>
         <option value="pm">pm</option>
       </select>

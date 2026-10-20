@@ -131,16 +131,18 @@ export function JobForm({
 
       <div className="flex min-w-0 flex-col gap-4">
         <Section title="Trip">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(12.5rem,1.4fr)_minmax(0,1fr)]">
             <Field label="Booking date" htmlFor="booked_on" hint="The day it was booked">
               <input id="booked_on" name="booked_on" type="date" value={bookedOn} onChange={(e) => setBookedOn(e.target.value)} className="field" />
             </Field>
             <Field label="Trip date" htmlFor="pickup_date">
               <input id="pickup_date" name="pickup_date" type="date" required value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} className="field" />
             </Field>
-            <Field label="Pickup time" htmlFor="pickup_time">
-              <TimeField id="pickup_time" name="pickup_time" required defaultValue={d.pickup_time} />
-            </Field>
+            <div className="col-span-2 sm:col-span-1">
+              <Field label="Pickup time" htmlFor="pickup_time">
+                <TimeField id="pickup_time" name="pickup_time" required defaultValue={d.pickup_time} />
+              </Field>
+            </div>
             <Field label="Service" htmlFor="service_type">
               <select id="service_type" name="service_type" defaultValue={d.service_type ?? "airport"} className="field">
                 {SERVICES.map((s) => <option key={s} value={s}>{SERVICE_LABEL[s]}</option>)}
