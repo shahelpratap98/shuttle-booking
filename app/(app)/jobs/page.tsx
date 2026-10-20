@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Bookings" };
 const VIEWS = {
   available: "Assign bookings",
   booked: "Booked this week",
-  day: "By day",
+  day: "By date",
   upcoming: "Upcoming",
   all: "All",
   collect: "Pay on the day",
@@ -43,7 +43,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const customer = /^[pn]:.{1,120}$/.test(s("customer")) ? s("customer") : ""; // one customer's bookings (lib/customers.ts key)
   const series = /^[0-9a-f-]{36}$/i.test(s("series")) ? s("series") : ""; // one repeating run
   const view: View = asked in VIEWS ? (asked as View) : s("from") || s("to") || s("driver") || s("q") || customer || series ? "all" : "available";
+  // By date: one day, or a start and end date (up to about three months).
   const day = isIsoDate(s("date")) ? s("date") : today;
+  const dayEnd = view === "day" && isIsoDate(s("end")) && s("end") > day && daysBetween(day, s("end")) <= 92 ? s("end") : day;
+  const span = daysBetween(day, dayEnd) + 1;
   const from = view !== "day" && isIsoDate(s("from")) ? s("from") : "";
   const to = view !== "day" && isIsoDate(s("to")) ? s("to") : "";
   const driver = s("driver");
@@ -76,7 +79,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       Object.assign(query, { from: today, unassigned: true, statuses: ["confirmed", "enquiry"], ...weekRange });
       break;
     case "day":
-      Object.assign(query, { from: day, to: day });
+      Object.assign(query, { from: day, to: dayEnd });
       break;
     case "upcoming":
       Object.assign(query, { from: today, statuses: ["confirmed", "enquiry"] });
@@ -109,7 +112,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   // Assign bookings: the week's calendar above the list, to see who's already
   // busy, and how many jobs still need a driver in each of the next weeks.
-  const boardWeek = weekStart ?? thisMonday;
+  const boardWeek = weekStart ?? (view === "available" && from ? startOfWeek(from) : thisMonday);
   const [found, people, vehicles, boardJobs, boardOff, openSoon] = await Promise.all([
     store.jobs(query),
     store.people(),
@@ -156,14 +159,22 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const bookedTotal = booked.reduce((sum, j) => sum + charge(j), 0);
   const dayLabel = (d: string) => (d === today ? `Today, ${fmtDay(d)}` : d === addDays(today, 1) ? `Tomorrow, ${fmtDay(d)}` : fmtDay(d));
   const daySummary = (g: { bookings: number; total: number }) => `${g.bookings} booking${g.bookings === 1 ? "" : "s"} · ${m(g.total)}`;
-  const grouped = view !== "day";
+  const grouped = view !== "day" || span > 1;
 
   const keep = (extra: Record<string, string>) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries({ q: search, driver, status, service, from, to, customer, series, ...extra })) if (v) p.set(k, v);
     return `/jobs?${p}`;
   };
-  const dayHref = (d: string) => keep({ view: "day", date: d, from: "", to: "" });
+  const dayHref = (d: string, end?: string) => keep({ view: "day", date: d, ...(end && end > d ? { end } : {}), from: "", to: "" });
+  // Steps back or forward by the length of the chosen dates (a day, a week...).
+  const shift = (n: number) => dayHref(addDays(day, n * span), span > 1 ? addDays(dayEnd, n * span) : undefined);
+  const presets: [string, string, string][] = [
+    ["Today", today, today],
+    ["Tomorrow", addDays(today, 1), addDays(today, 1)],
+    ["This week", startOfWeek(today), addDays(startOfWeek(today), 6)],
+    ["Next week", addDays(startOfWeek(today), 7), addDays(startOfWeek(today), 13)],
+  ];
   const deleted = s("deleted") === "1";
   const collectTotal =
     view === "unpaid" ? jobs.reduce((sum, j) => sum + charge(j), 0) : view === "collect" ? jobs.reduce((sum, j) => sum + j.collect_amount, 0) : 0;
@@ -218,7 +229,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       {view === "available" ? (
         <div className="mb-4 flex flex-col gap-2 print:hidden">
           <nav aria-label="Which week" className="flex flex-wrap items-center gap-1.5">
-            <Link href="/jobs?view=available" aria-current={!weekStart ? "page" : undefined} className={`btn btn-sm ${!weekStart ? "btn-primary" : "btn-quiet"}`}>
+            <Link href="/jobs?view=available" aria-current={!weekStart && !from && !to ? "page" : undefined} className={`btn btn-sm ${!weekStart && !from && !to ? "btn-primary" : "btn-quiet"}`}>
               All upcoming
             </Link>
             {QUICK_WEEKS.map((w) => (
@@ -245,6 +256,19 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
             <Link href={`/jobs?view=available&week=${addDays(boardWeek, 7)}`} className="btn btn-quiet btn-sm" aria-label="Next week">›</Link>
             <Link href={`/calendar?view=week&date=${boardWeek}`} className="link ml-2 hidden text-sm sm:inline">Open in Calendar</Link>
           </div>
+          <form className="flex flex-wrap items-end gap-2" aria-label="Pick dates">
+            <input type="hidden" name="view" value="available" />
+            <div>
+              <label htmlFor="assign-from" className="field-label">Start date</label>
+              <input id="assign-from" name="from" type="date" min={today} defaultValue={from} className="field w-40" />
+            </div>
+            <div>
+              <label htmlFor="assign-to" className="field-label">End date</label>
+              <input id="assign-to" name="to" type="date" min={today} defaultValue={to} className="field w-40" />
+            </div>
+            <FilterSubmit className="btn btn-quiet">Show these dates</FilterSubmit>
+            {from || to ? <span className="pb-2 text-sm font-semibold">Showing {from && to ? fmtRange(from, to) : from ? `from ${fmtDay(from)}` : `up to ${fmtDay(to)}`}</span> : null}
+          </form>
         </div>
       ) : null}
 
@@ -275,26 +299,43 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       ) : null}
 
       {view === "day" ? (
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 print:hidden">
-          <div className="flex items-center gap-1.5">
-            <Link href={dayHref(addDays(day, -1))} className="btn btn-quiet btn-sm shrink-0" aria-label="Previous day">‹</Link>
-            <form className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
-              <input type="hidden" name="view" value="day" />
-              <label htmlFor="date" className="sr-only">Day</label>
-              <input id="date" name="date" type="date" defaultValue={day} className="field min-w-0 flex-1 sm:w-44 sm:flex-none" />
-              <FilterSubmit className="btn btn-quiet btn-sm shrink-0">Go</FilterSubmit>
-            </form>
-            <Link href={dayHref(addDays(day, 1))} className="btn btn-quiet btn-sm shrink-0" aria-label="Next day">›</Link>
-          </div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold">{fmtLong(day)}</h2>
-            {day !== today ? <Link href={dayHref(today)} className="btn btn-quiet btn-sm">Today</Link> : null}
+        <div className="mb-4 flex flex-col gap-3 print:hidden">
+          <nav aria-label="Quick dates" className="flex flex-wrap gap-1.5">
+            {presets.map(([label, a, b]) => {
+              const on = a === day && b === dayEnd;
+              return (
+                <Link key={label} href={dayHref(a, b)} aria-current={on ? "page" : undefined} className={`btn btn-sm ${on ? "btn-primary" : "btn-quiet"}`}>
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
+            <div className="flex items-end gap-1.5">
+              <Link href={shift(-1)} className="btn btn-quiet btn-sm shrink-0" aria-label={span > 1 ? "Earlier dates" : "Previous day"}>‹</Link>
+              <form className="flex min-w-0 flex-1 items-end gap-1.5 sm:flex-none">
+                <input type="hidden" name="view" value="day" />
+                <div className="min-w-0 flex-1 sm:flex-none">
+                  <label htmlFor="date" className="field-label">Start date</label>
+                  <input id="date" name="date" type="date" defaultValue={day} className="field sm:w-44" />
+                </div>
+                <div className="min-w-0 flex-1 sm:flex-none">
+                  <label htmlFor="end" className="field-label">End date <span className="font-normal text-muted">(optional)</span></label>
+                  <input id="end" name="end" type="date" defaultValue={span > 1 ? dayEnd : ""} className="field sm:w-44" />
+                </div>
+                <FilterSubmit className="btn btn-quiet btn-sm shrink-0">Show</FilterSubmit>
+              </form>
+              <Link href={shift(1)} className="btn btn-quiet btn-sm shrink-0" aria-label={span > 1 ? "Later dates" : "Next day"}>›</Link>
+            </div>
+            <h2 className="text-lg font-bold">{span > 1 ? fmtRange(day, dayEnd) : fmtLong(day)}</h2>
           </div>
         </div>
       ) : null}
 
       <form className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end print:hidden" role="search">
         <input type="hidden" name="view" value={view} />
+        {view === "day" ? <input type="hidden" name="date" value={day} /> : null}
+        {view === "day" && span > 1 ? <input type="hidden" name="end" value={dayEnd} /> : null}
         {view === "booked" && salesWeek !== startOfWeek(today) ? <input type="hidden" name="wk" value={salesWeek} /> : null}
         {week ? <input type="hidden" name="week" value={week} /> : null}
         {customer ? <input type="hidden" name="customer" value={customer} /> : null}
@@ -362,7 +403,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       </p>
 
       {jobs.length === 0 ? (
-        <EmptyState title={view === "available" ? (weekStart ? `Every booking ${weekName(weekStart).toLowerCase()} has a driver.` : "Every upcoming booking has a driver.") : view === "day" ? `Nothing booked for ${fmtDay(day)}.` : view === "booked" ? "Nothing booked in this week." : "No bookings match."}>
+        <EmptyState title={view === "available" ? (weekStart ? `Every booking ${weekName(weekStart).toLowerCase()} has a driver.` : "Every upcoming booking has a driver.") : view === "day" ? `Nothing booked for ${span > 1 ? fmtRange(day, dayEnd) : fmtDay(day)}.` : view === "booked" ? "Nothing booked in this week." : "No bookings match."}>
           {view === "available" ? (
             "New bookings with the driver TBC will show up here."
           ) : view === "day" ? (

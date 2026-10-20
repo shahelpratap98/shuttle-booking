@@ -109,7 +109,7 @@ class DemoStore implements Store {
 
   async jobs(q: JobQuery) {
     const s = q.search?.trim().toLowerCase() ?? "";
-    const num = /^j-?(\d+)$/i.exec(s)?.[1];
+    const num = /^(?:j|#)[\s-]?(\d+)$/i.exec(s)?.[1];
     let list = data().jobs.filter((j) => {
       if (!this.visible(j)) return false;
       if (q.from && j.pickup_date < q.from) return false;
@@ -129,7 +129,7 @@ class DemoStore implements Store {
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        if (!hay.includes(s)) return false;
+        if (!hay.includes(s) && !(/^\d{3,9}$/.test(s) && j.job_no === Number(s))) return false;
       }
       return true;
     });

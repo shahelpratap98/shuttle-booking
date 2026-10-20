@@ -3,13 +3,15 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BarList, Heatmap, Legend, LineChart, StackedColumns } from "@/components/charts";
 import { PaymentChip, PersonDot, StatusChip } from "@/components/chips";
+import { DayJobs } from "@/components/day-jobs";
 import { PageHeader } from "@/components/page-header";
+import { FilterSubmit } from "@/components/pending-buttons";
 import { StatTile } from "@/components/stat-tile";
 import { TargetBar } from "@/components/target-bar";
 import { vehicleAlerts } from "@/lib/vehicles";
 import { requireOffice } from "@/lib/auth";
 import { BILLABLE, NO_DRIVER, SERVICE_LABEL, SOURCE_LABEL, UNASSIGNED_COLOUR } from "@/lib/constants";
-import { addDays, addMonths, endOfMonth, fmtDay, fmtShort, fmtTime, startOfMonth, startOfWeek, todayIn, WEEKDAYS } from "@/lib/dates";
+import { addDays, addMonths, endOfMonth, fmtDay, fmtLong, fmtShort, fmtTime, isIsoDate, startOfMonth, startOfWeek, todayIn, WEEKDAYS } from "@/lib/dates";
 import { bookingRef, businessPay, charge, expenses, money, num, pct, profit, shareLabel } from "@/lib/format";
 import { busyGrid, change, groupBy, monthly, PERIODS, periodFor, summarise, weekly } from "@/lib/metrics";
 import type { BookingSource, ServiceType } from "@/lib/types";
@@ -28,6 +30,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const share = shareLabel(settings.business_name); // "Trekway pay"
   const today = todayIn(settings.timezone);
   const period = periodFor(typeof params.period === "string" ? params.period : undefined, today);
+  // The day shown in "Jobs on ..." at the top (today unless one is picked).
+  const day = typeof params.day === "string" && isIsoDate(params.day) ? params.day : today;
+  const dashHref = (patch: Record<string, string>) => {
+    const p = new URLSearchParams();
+    if (typeof params.period === "string") p.set("period", params.period);
+    if (day !== today) p.set("day", day);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    const q = p.toString();
+    return q ? `/dashboard?${q}` : "/dashboard";
+  };
 
   // One fetch covers the period, the one before it, the weekly trend and the months.
   const trendStart = addDays(startOfWeek(period.to), -7 * (TREND_WEEKS - 1));
@@ -42,14 +57,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     store.weeklyTarget(),
   ]);
   const thisWeek = startOfWeek(today);
-  const [flagged, unpaidDrivers, sold, recentSales] = await Promise.all([
+  const [flagged, unpaidDrivers, sold, recentSales, dayJobs] = await Promise.all([
     store.jobs({ flagged: true }), // a flag stays until someone clears it, however old the trip
     store.jobs({ unsettled: true, to: today, statuses: ["completed", "no_show"] }),
     // Sales: bookings taken in the trend weeks, whatever the trip date.
     store.jobs({ bookedFrom: trendStart, bookedTo: addDays(startOfWeek(period.to), 6), statuses: BILLABLE }),
     // This week's and last week's sales, for the card at the top.
     store.jobs({ bookedFrom: addDays(thisWeek, -7), bookedTo: addDays(thisWeek, 6), statuses: BILLABLE }),
+    store.jobs({ from: day, to: day }),
   ]);
+  // Cancelled and no-show last; the rest by pick-up time.
+  const dayList = [...dayJobs].sort((a, b) => Number(a.status === "cancelled" || a.status === "no_show") - Number(b.status === "cancelled" || b.status === "no_show") || a.pickup_time.localeCompare(b.pickup_time));
+  const dayLive = dayList.filter((j) => j.status !== "cancelled" && j.status !== "no_show");
+  const dayRepeats = await store.repeatCounts(dayList.map((j) => j.id));
+  const dayTbc = dayLive.filter((j) => !j.driver_id && !j.operator).length;
+  const dayCollect = dayLive.filter((j) => !j.collected_via).reduce((s, j) => s + j.collect_amount, 0);
   const salesNow = recentSales.filter((j) => j.booked_on! >= thisWeek);
   const salesNowTotal = salesNow.reduce((s, j) => s + charge(j), 0);
   const salesLastTotal = recentSales.filter((j) => j.booked_on! < thisWeek).reduce((s, j) => s + charge(j), 0);
@@ -117,7 +139,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader
         title="Dashboard"
-        intro={<>{PERIODS[period.key]}: {period.label}. Changes compare with the {period.key.includes("month") ? "month" : "same length of time"} before.</>}
         actions={
           <>
             <Link href="/import" className="btn btn-quiet">Import spreadsheet</Link>
@@ -126,11 +147,49 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         }
       />
 
+      {/* the main thing: what's on, on any day */}
+      <section aria-labelledby="day-jobs-title" className="mb-8">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 id="day-jobs-title" className="text-2xl font-bold sm:text-[28px]">
+              {day === today ? "Today" : day === addDays(today, 1) ? "Tomorrow" : day === addDays(today, -1) ? "Yesterday" : fmtDay(day)}
+              <span className="ml-2 text-lg font-semibold text-muted">{fmtLong(day)}</span>
+            </h2>
+            <p className="mt-1 text-[15px]">
+              <b>{dayLive.length}</b> job{dayLive.length === 1 ? "" : "s"}
+              {dayTbc ? <> · <Link href={`/jobs?view=day&date=${day}&driver=none`} className="font-semibold text-bad hover:underline">{dayTbc} need{dayTbc === 1 ? "s" : ""} a driver</Link></> : dayLive.length ? <span className="text-ok"> · all have a driver</span> : null}
+              {dayCollect > 0 ? <> · drivers collect <b>{m(dayCollect)}</b></> : null}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 print:hidden">
+            <Link href={dashHref({ day: addDays(day, -1) })} className="btn btn-quiet btn-sm" aria-label="Previous day">‹</Link>
+            {day !== today ? <Link href={dashHref({ day: "" })} className="btn btn-quiet btn-sm">Today</Link> : null}
+            <Link href={dashHref({ day: addDays(day, 1) })} className="btn btn-quiet btn-sm" aria-label="Next day">›</Link>
+            <form action="/dashboard" className="flex items-center gap-1.5">
+              {typeof params.period === "string" ? <input type="hidden" name="period" value={params.period} /> : null}
+              <label htmlFor="dash-day" className="sr-only">Pick a day</label>
+              <input id="dash-day" name="day" type="date" defaultValue={day} className="field w-40 py-1" />
+              <FilterSubmit className="btn btn-quiet btn-sm">Go</FilterSubmit>
+            </form>
+          </div>
+        </div>
+        <DayJobs jobs={dayList} people={person} vehicleName={vehicleName} currency={cur} repeats={dayRepeats} />
+        <p className="mt-2 text-sm">
+          <Link href={`/calendar?view=day&date=${day}`} className="link">See it on the calendar</Link>
+          {" · "}
+          <Link href={`/jobs/new?date=${day < today ? today : day}`} className="link">Add a booking</Link>
+        </p>
+      </section>
+
+      <h2 className="text-lg font-bold">How the business is doing</h2>
+      <p className="mb-3 text-sm text-muted">
+        {PERIODS[period.key]}: {period.label}. Changes compare with the {period.key.includes("month") ? "month" : "same length of time"} before.
+      </p>
       <nav aria-label="Time period" className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-line bg-surface p-1 [scrollbar-width:none] print:hidden">
         {(Object.keys(PERIODS) as (keyof typeof PERIODS)[]).map((k) => (
           <Link
             key={k}
-            href={`/dashboard?period=${k}`}
+            href={dashHref({ period: k })}
             aria-current={k === period.key ? "page" : undefined}
             className={`rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap ${k === period.key ? "bg-ink text-on-ink" : "text-muted hover:bg-surface-2 hover:text-text"}`}
           >

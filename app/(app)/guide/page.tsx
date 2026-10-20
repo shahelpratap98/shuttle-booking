@@ -96,17 +96,22 @@ export default async function GuidePage() {
                 </li>
                 <li>Pick a driver and a vehicle next to the booking and tap <b>Assign</b>. Anyone off or already busy then is labelled in the list.</li>
                 <li>
-                  On the booking page, the <b>Job card</b> has the details in the same layout as the old Driver sheet. Tap <b>Send on WhatsApp</b> to
-                  send it to the driver, or <b>Copy</b> it. The driver also sees it straight away under My jobs.
+                  On the booking page, the <b>Job card</b> has the details in the same layout as the old Driver sheet. You can change or add to the
+                  text before sending (a gate code, a corrected detail); that changes the message only, so use <b>Edit</b> to change the booking itself.
+                  Tap <b>Send on WhatsApp</b> to send it to the driver, or <b>Copy</b> it. The driver also sees the booking straight away under My jobs.
                 </li>
               </Steps>
 
               <h3>Keep track</h3>
               <ul className="list-disc pl-5">
                 <li>
-                  <b>Bookings</b> tabs: <b>By day</b> (every job on one day, with ‹ › to move a day and the day&rsquo;s total), Upcoming and All (grouped by
-                  day, with each day&rsquo;s number of bookings and $), Pay on the day (money drivers will collect), Waiting for payment, Past. Search and
-                  filters are under the tabs.
+                  <b>Bookings</b> tabs: <b>By date</b> (one day, or a start and end date; Today, Tomorrow, This week and Next week buttons; ‹ › to move
+                  along), Upcoming and All (grouped by day, with each day&rsquo;s number of bookings and $), Pay on the day (money drivers will collect),
+                  Waiting for payment, Past. Search and filters are under the tabs.
+                </li>
+                <li>
+                  <b>Find a booking</b>: type its reference in the box at the top of every page: a TW- reference, its J-number (J-1158, or just 1158),
+                  a name or a phone number. One match opens it straight away. Every booking has a J-number, even when it has no TW- reference.
                 </li>
                 <li>
                   <b>Totals</b>: what&rsquo;s been booked month by month and week by week for any year, past or future (future months show what&rsquo;s
@@ -125,7 +130,7 @@ export default async function GuidePage() {
                 <li><b>Calendar</b>: everyone&rsquo;s jobs in their own colour. Day shows who is free when, Week is the dispatch board, Month is the big picture. Tap a name to hide or show that person. On a phone it shows as a list, day by day.</li>
                 <li><b>Status</b> on a booking: Confirm an enquiry, Mark done, Mark no-show or Cancel. Cancel rather than delete, so it still counts in the numbers.</li>
                 <li><b>Time off</b>: add anyone&rsquo;s days off. They show on the calendar and in the Assign list.</li>
-                <li><b>Dashboard</b>: bookings, charges, driver pay and {share} for any period, month by month and week by week, where bookings come from, busiest days and times, and totals per driver and vehicle.</li>
+                <li><b>Dashboard</b>: first, the jobs on a day (today unless you pick another): time, customer, where from and to, driver and vehicle, and what the driver collects, with ‹ › to move a day. Below that, bookings, charges, driver pay and {share} for any period, month by month and week by week, where bookings come from, busiest days and times, and totals per driver and vehicle.</li>
                 <li><b>Vehicles</b>: add or retire vehicles, with rego, seats and the COF, rego and service due dates. The dashboard reminds you a month ahead.</li>
               </ul>
 

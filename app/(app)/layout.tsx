@@ -61,6 +61,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="hidden sm:contents">
             <NavLinks links={links} />
           </div>
+          {office ? (
+            <form action="/jobs/find" role="search" className="order-last w-full sm:order-none sm:w-auto">
+              <label htmlFor="find-booking" className="sr-only">Find a booking by reference, J-number, name or phone</label>
+              <input
+                id="find-booking"
+                name="q"
+                type="search"
+                placeholder="Find booking: TW-…, J-1234, name"
+                className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/60 focus:bg-white focus:text-text focus:placeholder:text-muted sm:w-64"
+              />
+            </form>
+          ) : null}
           <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-white/80 sm:hidden">{viewer.display_name.split(" ")[0]}</span>
           <div className="ml-auto hidden items-center gap-4 text-sm sm:flex">
             <Link href="/account" className="text-white/80 underline-offset-4 hover:text-white hover:underline">

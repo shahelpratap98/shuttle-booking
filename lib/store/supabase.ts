@@ -151,15 +151,15 @@ class SupabaseStore implements Store {
     if (q.customerKey) query = query.eq("customer_key", q.customerKey);
     if (q.search) {
       const s = cleanSearch(q.search);
-      const num = /^j-?(\d+)$/i.exec(s)?.[1];
+      // "J-1158", "j 1158", "#1158": that booking. A bare number also finds
+      // job numbers, as well as phones and references containing it.
+      const num = /^(?:j|#)[\s-]?(\d+)$/i.exec(s)?.[1];
       if (num) query = query.eq("job_no", Number(num));
       else if (s) {
         const like = `%${s}%`;
-        query = query.or(
-          ["booking_ref", "customer_name", "customer_phone", "customer_email", "pickup_address", "dropoff_address", "flight_no", "notes"]
-            .map((c) => `${c}.ilike.${like}`)
-            .join(","),
-        );
+        const ors = ["booking_ref", "customer_name", "customer_phone", "customer_email", "pickup_address", "dropoff_address", "flight_no", "notes"].map((c) => `${c}.ilike.${like}`);
+        if (/^\d{3,9}$/.test(s)) ors.push(`job_no.eq.${s}`);
+        query = query.or(ors.join(","));
       }
     }
     const asc = (q.order ?? "asc") === "asc";

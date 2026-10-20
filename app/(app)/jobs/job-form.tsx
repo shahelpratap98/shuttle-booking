@@ -198,7 +198,11 @@ export function JobForm({
                 {SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
               </select>
             </Field>
-            <Field label="Booking reference" htmlFor="booking_ref" hint="Your own reference, if it has one">
+            <Field
+              label="Booking reference"
+              htmlFor="booking_ref"
+              hint={`The TW- reference, if it has one. Every booking also gets its own J-number${job ? ` (this one is J-${job.job_no})` : " when it's saved"}, so it can always be found.`}
+            >
               <input id="booking_ref" name="booking_ref" maxLength={60} defaultValue={d.booking_ref ?? ""} className="field" placeholder="TW-20260910-024" />
             </Field>
           </div>
