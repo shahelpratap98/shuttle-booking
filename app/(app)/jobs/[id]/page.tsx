@@ -196,7 +196,7 @@ export default async function JobPage({
               {job.customer_email ? <a href={`mailto:${job.customer_email}`} className="link">{job.customer_email}</a> : null}
               {!job.customer_phone && !job.customer_email ? <span className="text-muted">No contact details</span> : null}
             </div>
-            {office ? <p className="mt-2 text-sm text-muted">Booked through {SOURCE_LABEL[job.booking_source].toLowerCase()} on {fmtLong(job.booked_on ?? job.created_at.slice(0, 10))}.</p> : null}
+            {office ? <p className="mt-2 text-sm text-muted">Booked through {SOURCE_LABEL[job.booking_source].toLowerCase()}{job.booked_on ? ` on ${fmtLong(job.booked_on)}` : " (booking date not known: imported without a TW- reference)"}.</p> : null}
             {history.length ? (
               <div className="mt-3">
                 <p className="text-xs font-semibold text-muted uppercase">Their other bookings</p>
